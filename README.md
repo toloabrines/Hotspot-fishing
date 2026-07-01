@@ -2,20 +2,20 @@
 
 ## iOS TestFlight CI
 
-Este repositorio usa el workflow:
+This repository uses the workflow:
 
 - `.github/workflows/ios-testflight.yml`
 
-## Secrets requeridos
+## Required Secrets
 
-Configura estos **Repository Secrets** en GitHub:
+Configure these **Repository Secrets** in GitHub:
 
 - `APP_STORE_CONNECT_API_KEY_ID`
 - `APP_STORE_CONNECT_ISSUER_ID`
 - `APP_STORE_CONNECT_API_KEY`
 
-## Ejecución
+## Running
 
-1. Ve a **Actions**
-2. Selecciona **iOS TestFlight**
-3. Haz clic en **Run workflow**
+1. Go to **Actions**
+2. Select **iOS TestFlight**
+3. Click **Run workflow**
