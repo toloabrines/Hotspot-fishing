@@ -1,0 +1,128 @@
+name: Build iOS and Publish to App Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Publish a beta build to TestFlight or a release to the App Store
+        required: true
+        default: beta
+        type: choice
+        options:
+          - beta
+          - release
+      submit_for_review:
+        description: Automatically submit the App Store release for review
+        required: false
+        default: false
+        type: boolean
+      automatic_release:
+        description: Automatically release the app after approval
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect project files
+        id: project-files
+        run: |
+          echo "has_package_json=$([ -f package.json ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "has_ios_app=$([ -d ios/App ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "has_fastlane_config=$([ -f ios/App/fastlane/Fastfile ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          if [ -d ios/App ] && find ios/App -maxdepth 1 \( -name '*.xcodeproj' -o -name '*.xcworkspace' \) | grep -q .; then
+            echo "has_ios_build_project=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_ios_build_project=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pre-flight metadata checks
+        run: |
+          python3 <<'PY'
+          import json
+          from pathlib import Path
+          root = Path(".")
+          required_files = {
+              "app-metadata.json": ["name", "description", "keywords", "category"],
+              "app-store-config.json": ["bundleIdentifier", "appId", "teamId"],
+          }
+          missing = []
+          for relative_path, keys in required_files.items():
+              file_path = root / relative_path
+              if not file_path.is_file():
+                  missing.append(relative_path)
+                  continue
+              content = json.loads(file_path.read_text())
+              missing_keys = [key for key in keys if key not in content]
+              if missing_keys:
+                  raise SystemExit(f"{relative_path} is missing required keys: {', '.join(missing_keys)}")
+          for relative_path in ["app-screenshots.md", "ios/App/Info.plist.template", "PUBLISHING.md"]:
+              if not (root / relative_path).is_file():
+                  missing.append(relative_path)
+          if missing:
+              raise SystemExit(f"Missing required publishing files: {', '.join(missing)}")
+          keywords = json.loads((root / "app-metadata.json").read_text())["keywords"]
+          if not isinstance(keywords, list) or not keywords:
+              raise SystemExit("app-metadata.json must define a non-empty keywords array")
+          PY
+
+      - name: Setup Node
+        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build web
+        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
+        run: npm run build
+
+      - name: Sync Capacitor
+        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
+        run: npx cap sync ios
+
+      - name: Setup Ruby
+        if: ${{ steps.project-files.outputs.has_fastlane_config == 'true' }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+
+      - name: Install Fastlane
+        if: ${{ steps.project-files.outputs.has_fastlane_config == 'true' }}
+        run: sudo gem install fastlane
+
+      - name: Import App Store Connect API Key
+        if: ${{ steps.project-files.outputs.has_fastlane_config == 'true' }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "${{ secrets.APP_STORE_CONNECT_API_KEY }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8
+
+      - name: Build and publish
+        if: ${{ steps.project-files.outputs.has_fastlane_config == 'true' && steps.project-files.outputs.has_ios_build_project == 'true' }}
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_PATH: ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8
+          SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
+          AUTOMATIC_RELEASE: ${{ inputs.automatic_release }}
+        run: |
+          cd ios/App
+          fastlane "${{ inputs.release_type }}"
+
+      - name: Report missing iOS build project
+        if: ${{ steps.project-files.outputs.has_fastlane_config == 'true' && steps.project-files.outputs.has_ios_build_project != 'true' }}
+        run: echo "::notice::Publishing files are configured, but no Xcode project or workspace was found under ios/App. Add the iOS app project to enable TestFlight/App Store uploads."
