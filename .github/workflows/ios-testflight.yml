@@ -36,6 +36,11 @@ jobs:
           echo "has_package_json=$([ -f package.json ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "has_ios_app=$([ -d ios/App ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "has_fastlane_config=$([ -f ios/App/fastlane/Fastfile ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          if [ -f app-metadata.json ] || [ -f app-store-config.json ]; then
+            echo "has_publishing_config=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_publishing_config=false" >> "$GITHUB_OUTPUT"
+          fi
           if [ -d ios/App ] && find ios/App -maxdepth 1 \( -name '*.xcodeproj' -o -name '*.xcworkspace' \) | grep -q .; then
             echo "has_ios_build_project=true" >> "$GITHUB_OUTPUT"
           else
@@ -43,6 +48,7 @@ jobs:
           fi
 
       - name: Pre-flight metadata checks
+        if: ${{ steps.project-files.outputs.has_publishing_config == 'true' }}
         run: |
           python3 <<'PY'
           import json
