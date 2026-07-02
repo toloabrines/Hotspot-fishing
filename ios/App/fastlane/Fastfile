@@ -1,0 +1,117 @@
+require 'json'
+require 'fileutils'
+
+default_platform(:ios)
+
+def root_path
+  File.expand_path('../../..', __dir__)
+end
+
+def app_store_config
+  @app_store_config ||= JSON.parse(File.read(File.join(root_path, 'app-store-config.json')))
+end
+
+def app_metadata
+  @app_metadata ||= JSON.parse(File.read(File.join(root_path, 'app-metadata.json')))
+end
+
+def metadata_dir
+  File.join(__dir__, 'metadata', 'en-US')
+end
+
+def screenshots_dir
+  File.join(__dir__, 'screenshots')
+end
+
+def screenshot_assets
+  Dir[File.join(screenshots_dir, '**', '*')].select do |path|
+    File.file?(path) && !File.basename(path).start_with?('.')
+  end
+end
+
+def app_store_api_key
+  app_store_connect_api_key(
+    key_id: ENV.fetch('APP_STORE_CONNECT_API_KEY_ID'),
+    issuer_id: ENV.fetch('APP_STORE_CONNECT_ISSUER_ID'),
+    key_filepath: ENV.fetch('APP_STORE_CONNECT_API_KEY_PATH')
+  )
+end
+
+def write_metadata_file(filename, content)
+  FileUtils.mkdir_p(metadata_dir)
+  File.write(File.join(metadata_dir, filename), "#{content}\n")
+end
+
+private_lane :prepare_metadata do
+  metadata = app_metadata
+  write_metadata_file('name.txt', metadata.fetch('name'))
+  write_metadata_file('description.txt', metadata.fetch('description'))
+  write_metadata_file('keywords.txt', Array(metadata.fetch('keywords')).join(','))
+  FileUtils.mkdir_p(screenshots_dir)
+end
+
+private_lane :build_ios_app do
+  options = {
+    scheme: ENV.fetch('IOS_SCHEME', 'App'),
+    configuration: ENV.fetch('IOS_CONFIGURATION', 'Release'),
+    export_method: 'app-store',
+    xcargs: "PRODUCT_BUNDLE_IDENTIFIER=#{app_store_config.fetch('bundleIdentifier')}"
+  }
+
+  workspace = ENV['IOS_WORKSPACE']
+  project = ENV['IOS_PROJECT']
+  auto_workspace = Dir[File.expand_path('../*.xcworkspace', __dir__)].first
+  auto_project = Dir[File.expand_path('../*.xcodeproj', __dir__)].first
+
+  if workspace.to_s != ''
+    options[:workspace] = workspace
+  elsif project.to_s != ''
+    options[:project] = project
+  elsif auto_workspace
+    options[:workspace] = auto_workspace
+  elsif auto_project
+    options[:project] = auto_project
+  else
+    UI.user_error!('No iOS Xcode project or workspace was found in ios/App.')
+  end
+
+  build_app(options)
+end
+
+platform :ios do
+  desc 'Build the iOS app and upload the binary to TestFlight'
+  lane :beta do
+    build_ios_app
+
+    upload_to_testflight(
+      api_key: app_store_api_key,
+      ipa: lane_context[SharedValues::IPA_OUTPUT_PATH],
+      changelog: ENV['TESTFLIGHT_CHANGELOG'],
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc 'Build the iOS app and upload it to App Store Connect with metadata and screenshots'
+  lane :release do
+    prepare_metadata
+
+    if screenshot_assets.empty?
+      UI.user_error!("Add App Store screenshots to #{screenshots_dir} before running the release lane.")
+    end
+
+    build_ios_app
+
+    deliver(
+      api_key: app_store_api_key,
+      ipa: lane_context[SharedValues::IPA_OUTPUT_PATH],
+      metadata_path: File.join(__dir__, 'metadata'),
+      screenshots_path: screenshots_dir,
+      skip_metadata: false,
+      skip_screenshots: false,
+      skip_binary_upload: false,
+      submit_for_review: ENV['SUBMIT_FOR_REVIEW'] == 'true',
+      automatic_release: ENV['AUTOMATIC_RELEASE'] == 'true',
+      force: true
+    )
+  end
+end

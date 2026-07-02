@@ -1,0 +1,8 @@
+require 'json'
+
+config = JSON.parse(File.read(File.expand_path('../../../app-store-config.json', __dir__)))
+
+app_identifier(config.fetch('bundleIdentifier'))
+apple_id(ENV['APP_STORE_CONNECT_APPLE_ID']) if ENV['APP_STORE_CONNECT_APPLE_ID'].to_s != ''
+team_id(ENV['APPLE_TEAM_ID'] || config['teamId']) if (ENV['APPLE_TEAM_ID'] || config['teamId']).to_s != ''
+itc_team_id(ENV['APP_STORE_TEAM_ID'] || config['appStoreTeamId']) if (ENV['APP_STORE_TEAM_ID'] || config['appStoreTeamId']).to_s != ''

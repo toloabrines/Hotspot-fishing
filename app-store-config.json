@@ -1,0 +1,9 @@
+{
+  "bundleIdentifier": "com.toloabrines.hotspotfishing",
+  "appId": "0000000000",
+  "teamId": "YOUR_TEAM_ID",
+  "appStoreTeamId": "YOUR_APP_STORE_TEAM_ID",
+  "displayName": "Hotspot Fishing",
+  "version": "1.0.0",
+  "buildNumber": "1"
+}
