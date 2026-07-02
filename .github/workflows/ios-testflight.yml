@@ -12,39 +12,48 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Detect project files
+        id: project-files
+        run: |
+          echo "has_package_json=$([ -f package.json ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "has_ios_app=$([ -d ios/App ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node
-        if: ${{ hashFiles('package.json') != '' }}
+        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install dependencies
-        if: ${{ hashFiles('package.json') != '' }}
+        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
         run: npm install
 
       - name: Build web
-        if: ${{ hashFiles('package.json') != '' }}
+        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
         run: npm run build
 
       - name: Sync Capacitor
-        if: ${{ hashFiles('package.json') != '' }}
+        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
         run: npx cap sync ios
 
       - name: Setup Ruby
+        if: ${{ steps.project-files.outputs.has_ios_app == 'true' }}
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
 
       - name: Install Fastlane
+        if: ${{ steps.project-files.outputs.has_ios_app == 'true' }}
         run: sudo gem install fastlane
 
       - name: Import App Store Connect API Key
+        if: ${{ steps.project-files.outputs.has_ios_app == 'true' }}
         run: |
           mkdir -p ~/.appstoreconnect/private_keys
           echo "${{ secrets.APP_STORE_CONNECT_API_KEY }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
       - name: Build and Upload
-        if: ${{ hashFiles('ios/App/**') != '' }}
+        if: ${{ steps.project-files.outputs.has_ios_app == 'true' }}
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
