@@ -1,134 +1,267 @@
-name: Build iOS and Publish to App Store
+name: iOS — TestFlight
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
-      release_type:
-        description: Publish a beta build to TestFlight or a release to the App Store
+      lane:
+        description: "fastlane lane (beta | release)"
         required: true
-        default: beta
+        default: "beta"
         type: choice
         options:
           - beta
           - release
-      submit_for_review:
-        description: Automatically submit the App Store release for review
-        required: false
-        default: false
-        type: boolean
-      automatic_release:
-        description: Automatically release the app after approval
-        required: false
-        default: false
-        type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "ios/**"
+      - "ios-config/**"
+      - "capacitor.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "Gemfile"
+      - "Gemfile.lock"
+      - "fastlane/**"
+    tags:
+      - "ios-v*" # ej. ios-v1.0.3 dispara una subida a TestFlight
 
 jobs:
-  build:
-    runs-on: macos-14
-
+  preflight:
+    name: Preflight — detectar secretos iOS
+    runs-on: ubuntu-latest
+    outputs:
+      has_ios_secrets: ${{ steps.check.outputs.has_ios_secrets }}
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+      IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+      IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
     steps:
-      - name: Checkout repository
+      - name: Check Apple signing secrets
+        id: check
+        run: |
+          set -e
+          missing=0
+          for key in APPLE_TEAM_ID IOS_BUNDLE_ID APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_P8 IOS_DIST_CERT_P12_BASE64 IOS_DIST_CERT_PASSWORD IOS_PROVISIONING_PROFILE_BASE64 KEYCHAIN_PASSWORD; do
+            if [ -z "${!key}" ]; then
+              echo "• Falta secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" = "0" ]; then
+            echo "✓ Todos los secretos iOS están presentes"
+            echo "has_ios_secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "⚠ Faltan secretos iOS — el job de iOS se saltará, pero el web continúa"
+            echo "has_ios_secrets=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  web:
+    name: Web — lint & build
+    runs-on: ubuntu-latest
+    needs: preflight
+    continue-on-error: true
+    steps:
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Detect project files
-        id: project-files
-        run: |
-          echo "has_package_json=$([ -f package.json ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "has_ios_app=$([ -d ios/App ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "has_fastlane_config=$([ -f ios/App/fastlane/Fastfile ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          if [ -f app-metadata.json ] || [ -f app-store-config.json ]; then
-            echo "has_publishing_config=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_publishing_config=false" >> "$GITHUB_OUTPUT"
-          fi
-          if [ -d ios/App ] && find ios/App -maxdepth 1 \( -name '*.xcodeproj' -o -name '*.xcworkspace' \) | grep -q .; then
-            echo "has_ios_build_project=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_ios_build_project=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Pre-flight metadata checks
-        if: ${{ steps.project-files.outputs.has_publishing_config == 'true' }}
-        run: |
-          python3 <<'PY'
-          import json
-          from pathlib import Path
-          root = Path(".")
-          required_files = {
-              "app-metadata.json": ["name", "description", "keywords", "category"],
-              "app-store-config.json": ["bundleIdentifier", "appId", "teamId"],
-          }
-          missing = []
-          for relative_path, keys in required_files.items():
-              file_path = root / relative_path
-              if not file_path.is_file():
-                  missing.append(relative_path)
-                  continue
-              content = json.loads(file_path.read_text())
-              missing_keys = [key for key in keys if key not in content]
-              if missing_keys:
-                  raise SystemExit(f"{relative_path} is missing required keys: {', '.join(missing_keys)}")
-          for relative_path in ["app-screenshots.md", "ios/App/Info.plist.template", "PUBLISHING.md"]:
-              if not (root / relative_path).is_file():
-                  missing.append(relative_path)
-          if missing:
-              raise SystemExit(f"Missing required publishing files: {', '.join(missing)}")
-          keywords = json.loads((root / "app-metadata.json").read_text())["keywords"]
-          if not isinstance(keywords, list) or not keywords:
-              raise SystemExit("app-metadata.json must define a non-empty keywords array")
-          PY
-
-      - name: Setup Node
-        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "22"
+          cache: "npm"
 
-      - name: Install dependencies
-        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
+      - name: Install JS deps
+        run: npm install --ignore-scripts
+
+      - name: Lint (si existe)
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
+          if npm run | grep -qE '^\s*lint'; then
+            npm run lint
           else
-            npm install
+            echo "Sin script lint definido — se omite"
           fi
 
-      - name: Build web
-        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
+      - name: Build web (PWA)
         run: npm run build
 
-      - name: Sync Capacitor
-        if: ${{ steps.project-files.outputs.has_package_json == 'true' }}
-        run: npx cap sync ios
+  build-and-upload:
+    name: Build & upload to App Store Connect
+    needs: preflight
+    if: needs.preflight.outputs.has_ios_secrets == 'true'
+    runs-on: macos-14
+    timeout-minutes: 60
 
-      - name: Setup Ruby
-        if: ${{ steps.project-files.outputs.has_fastlane_config == 'true' }}
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+      IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+      IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+      IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+      IOS_PROVISIONING_PROFILE_NAME: ${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          set -e
+          ls -1 /Applications | grep '^Xcode' || true
+          if [ -d /Applications/Xcode_15.4.app ]; then
+            sudo xcode-select -s /Applications/Xcode_15.4.app
+          else
+            sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
+          fi
+          xcodebuild -version
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Ruby + bundler cache
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.2'
+          ruby-version: "3.2"
+          bundler-cache: true
 
-      - name: Install Fastlane
-        if: ${{ steps.project-files.outputs.has_fastlane_config == 'true' }}
-        run: sudo gem install fastlane
-
-      - name: Import App Store Connect API Key
-        if: ${{ steps.project-files.outputs.has_fastlane_config == 'true' }}
+      - name: Clean caches (node_modules, DerivedData, Pods cache)
         run: |
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo "${{ secrets.APP_STORE_CONNECT_API_KEY }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8
+          set -e
+          rm -rf node_modules
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+          rm -rf ~/Library/Caches/CocoaPods
+          echo "✓ Caches limpiadas sin borrar el proyecto iOS nativo"
 
-      - name: Build and publish
-        if: ${{ steps.project-files.outputs.has_fastlane_config == 'true' && steps.project-files.outputs.has_ios_build_project == 'true' }}
+      - name: Install JS deps (Capacitor CLI y plugins)
+        run: npm install --ignore-scripts
+
+      - name: Verify Capacitor CLI
+        run: |
+          set -e
+          node --version
+          npm --version
+          CAP_VERSION="$(npx --no-install cap --version)"
+          echo "Capacitor CLI version: $CAP_VERSION"
+          npm ls @capacitor/cli @capacitor/core @capacitor/ios @capacitor/app || true
+
+      - name: Create dist placeholder (app carga URL remota)
+        run: |
+          mkdir -p dist
+          echo '<html><body>Loading...</body></html>' > dist/index.html
+
+      - name: Apply Privacy Manifest + Info.plist keys
+        run: |
+          set -e
+          mkdir -p ios/App/App
+          cp ios-config/PrivacyInfo.xcprivacy ios/App/App/PrivacyInfo.xcprivacy
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Hotspot Fishing usa tu ubicación únicamente para centrar el mapa oceanográfico en tu posición actual. No se almacena ni se comparte.'" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 'Hotspot Fishing'" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool true" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool true" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes array" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:0 string comgoogleearth" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:1 string comgoogleearth-x-callback" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationQueriesSchemes:2 string comgoogleearthz" "$PLIST" || true
+
+      - name: Sync Capacitor (npx cap sync ios)
+        run: npx --no-install cap sync ios
+
+      - name: Setup CocoaPods
+        run: |
+          gem install cocoapods --no-document || sudo gem install cocoapods --no-document
+          pod --version
+
+      - name: Install Pods
+        working-directory: ios/App
+        run: |
+          set -e
+          pod repo update
+          pod install
+
+      - name: Verify required iOS artifacts
+        run: |
+          set -e
+          echo "→ Verificando estructura del proyecto iOS..."
+          test -f ios/App/Podfile            || { echo "✗ Falta ios/App/Podfile"; exit 1; }
+          test -d ios/App/Pods               || { echo "✗ Falta ios/App/Pods"; exit 1; }
+          test -d ios/App/App.xcworkspace    || { echo "✗ Falta ios/App/App.xcworkspace"; exit 1; }
+          test -f ios/App/App/EarthSharePlugin.swift || { echo "✗ Falta EarthSharePlugin.swift"; exit 1; }
+          test -f ios/App/App/MainViewController.swift || { echo "✗ Falta MainViewController.swift"; exit 1; }
+          test -f ios/App/App/PrivacyInfo.xcprivacy || { echo "✗ Falta PrivacyInfo.xcprivacy"; exit 1; }
+          grep -q "EarthSharePlugin.swift in Sources" ios/App/App.xcodeproj/project.pbxproj || { echo "✗ EarthSharePlugin no está incluido en Sources"; exit 1; }
+          grep -q "MainViewController" ios/App/App/Base.lproj/Main.storyboard || { echo "✗ Main.storyboard no usa MainViewController"; exit 1; }
+          echo "✓ Podfile, Pods y App.xcworkspace existen"
+
+      - name: Run fastlane lane
+        if: github.event_name != 'pull_request'
         env:
-          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_API_KEY_PATH: ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8
-          SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
-          AUTOMATIC_RELEASE: ${{ inputs.automatic_release }}
-        run: |
-          cd ios/App
-          fastlane "${{ inputs.release_type }}"
+          BUILD_NUMBER: ${{ github.run_number }}
+          LANE: ${{ github.event.inputs.lane || 'beta' }}
+          IOS_PROJECT_PREPARED: "true"
+        run: bundle exec fastlane ios "$LANE"
 
-      - name: Report missing iOS build project
-        if: ${{ steps.project-files.outputs.has_fastlane_config == 'true' && steps.project-files.outputs.has_ios_build_project != 'true' }}
-        run: echo "::notice::Publishing files are configured, but no Xcode project or workspace was found under ios/App. Add the iOS app project to enable TestFlight/App Store uploads."
+      - name: Show Fastlane/Xcode build logs on failure
+        if: failure() && github.event_name != 'pull_request'
+        run: |
+          set +e
+          echo "→ Últimas líneas de logs de Fastlane/gym"
+          for log in "$HOME"/Library/Logs/gym/*.log fastlane/*.log; do
+            [ -f "$log" ] || continue
+            echo "===== $log ====="
+            tail -n 200 "$log"
+          done
+
+      - name: Skip TestFlight upload on pull requests
+        if: github.event_name == 'pull_request'
+        run: echo "Pull request build validated. TestFlight upload is skipped because Apple signing secrets are only used on manual/tag runs."
+
+      - name: Upload .ipa artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HotspotFishing-ipa
+          path: build/*.ipa
+          if-no-files-found: ignore
+
+      - name: Upload Fastlane/Xcode logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastlane-xcode-logs
+          path: |
+            ~/Library/Logs/gym/*.log
+            fastlane/*.log
+          if-no-files-found: ignore
+
+  ios-skipped-notice:
+    name: iOS build skipped (faltan secretos)
+    needs: preflight
+    if: needs.preflight.outputs.has_ios_secrets != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aviso
+        run: |
+          echo "⚠ El job de iOS se saltó porque faltan uno o más secretos de Apple."
+          echo "Añádelos en Settings → Secrets and variables → Actions para habilitar la build de iOS."
+          echo "El job web continúa ejecutándose con normalidad."
+

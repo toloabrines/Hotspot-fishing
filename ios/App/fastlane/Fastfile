@@ -1,0 +1,74 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    setup_ci if is_ci
+    
+    # Get provisioning profiles
+    match(type: "appstore", force: true) if is_ci
+    
+    # Increment build number
+    increment_build_number(
+      xcodeproj: "App.xcodeproj"
+    )
+    
+    # Build the application
+    build_app(
+      workspace: "App.xcworkspace",
+      scheme: "App",
+      configuration: "Release",
+      derived_data_path: "build",
+      destination: "generic/platform=iOS",
+      xcargs: "-allowProvisioningUpdates",
+      export_method: "app-store",
+      output_directory: "build",
+      output_name: "HotspotFishing.ipa",
+      skip_package_ipa: false
+    )
+    
+    # Upload to TestFlight
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      distribute_external: false
+    )
+  end
+
+  desc "Build and upload to App Store"
+  lane :release do
+    setup_ci if is_ci
+    
+    # Get provisioning profiles
+    match(type: "appstore", force: true) if is_ci
+    
+    # Increment build number
+    increment_build_number(
+      xcodeproj: "App.xcodeproj"
+    )
+    
+    # Build the application
+    build_app(
+      workspace: "App.xcworkspace",
+      scheme: "App",
+      configuration: "Release",
+      derived_data_path: "build",
+      destination: "generic/platform=iOS",
+      xcargs: "-allowProvisioningUpdates",
+      export_method: "app-store",
+      output_directory: "build",
+      output_name: "HotspotFishing.ipa",
+      skip_package_ipa: false
+    )
+    
+    # Upload to App Store Connect
+    upload_to_app_store(
+      skip_screenshots: true,
+      skip_metadata: true,
+      skip_app_version_update: true,
+      force: true,
+      distribute_external: false
+    )
+  end
+end
+

@@ -1,0 +1,53 @@
+<!--
+  Hotspot Fishing — Info.plist snippet
+  Merge estas claves dentro del <dict> raíz de ios/App/App/Info.plist
+  (generado por `npx cap add ios`). NO sobrescribas el Info.plist entero:
+  añade solo las claves que no existan todavía.
+-->
+
+<!-- 1) Ubicación: usada por navigator.geolocation desde la WebView -->
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Hotspot Fishing usa tu ubicación únicamente para centrar el mapa oceanográfico en tu posición actual. No se almacena ni se comparte.</string>
+
+<!-- 2) Encryption export compliance: evita el cuestionario en cada release -->
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>
+
+<!-- 3) Orientaciones soportadas — iPhone -->
+<key>UISupportedInterfaceOrientations</key>
+<array>
+  <string>UIInterfaceOrientationPortrait</string>
+  <string>UIInterfaceOrientationLandscapeLeft</string>
+  <string>UIInterfaceOrientationLandscapeRight</string>
+</array>
+
+<!-- 4) Orientaciones soportadas — iPad -->
+<key>UISupportedInterfaceOrientations~ipad</key>
+<array>
+  <string>UIInterfaceOrientationPortrait</string>
+  <string>UIInterfaceOrientationPortraitUpsideDown</string>
+  <string>UIInterfaceOrientationLandscapeLeft</string>
+  <string>UIInterfaceOrientationLandscapeRight</string>
+</array>
+
+<!-- 5) Nombre visible bajo el icono en la home (opcional, recomendado) -->
+<key>CFBundleDisplayName</key>
+<string>Hotspot Fishing</string>
+
+<!-- 6) Export KML/GPX a Google Earth desde iOS: el archivo se guarda en Documents y se comparte como documento nativo -->
+<key>UIFileSharingEnabled</key>
+<true/>
+<key>LSSupportsOpeningDocumentsInPlace</key>
+<true/>
+<key>LSApplicationQueriesSchemes</key>
+<array>
+  <string>comgoogleearth</string>
+</array>
+
+<!--
+  NO añadir claves de cámara, micrófono, fotos, contactos, calendario,
+  bluetooth, salud, motion ni Face ID: Apple rechaza la build si se
+  declara una NSxxxUsageDescription sin usar la API correspondiente.
+  ATS (App Transport Security) se deja en su default: solo HTTPS.
+-->
+

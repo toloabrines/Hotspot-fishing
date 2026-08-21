@@ -1,0 +1,1187 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-ocean-cyan: var(--ocean-cyan);
+  --color-ocean-warm: var(--ocean-warm);
+  --color-ocean-green: var(--ocean-green);
+  --color-ocean-deep: var(--ocean-deep);
+  --color-panel: var(--panel);
+  --color-panel-foreground: var(--panel-foreground);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap");
+}
+
+:root {
+  --radius: 0.5rem;
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Dark oceanic palette */
+  --background: oklch(0.13 0.02 240);
+  --foreground: oklch(0.92 0.01 230);
+  --card: oklch(0.17 0.025 235);
+  --card-foreground: oklch(0.92 0.01 230);
+  --popover: oklch(0.17 0.025 235);
+  --popover-foreground: oklch(0.92 0.01 230);
+  --primary: oklch(0.72 0.14 195);
+  --primary-foreground: oklch(0.13 0.02 240);
+  --secondary: oklch(0.22 0.03 235);
+  --secondary-foreground: oklch(0.85 0.02 230);
+  --muted: oklch(0.2 0.025 235);
+  --muted-foreground: oklch(0.6 0.03 230);
+  --accent: oklch(0.72 0.14 195);
+  --accent-foreground: oklch(0.13 0.02 240);
+  --destructive: oklch(0.6 0.22 25);
+  --destructive-foreground: oklch(0.95 0.01 230);
+  --border: oklch(0.25 0.03 235);
+  --input: oklch(0.22 0.03 235);
+  --ring: oklch(0.72 0.14 195);
+
+  /* Ocean data colors */
+  --ocean-cyan: oklch(0.78 0.15 195);
+  --ocean-warm: oklch(0.75 0.16 50);
+  --ocean-green: oklch(0.72 0.18 145);
+  --ocean-deep: oklch(0.45 0.12 260);
+  --map-land: oklch(0.86 0.01 240);
+  --map-coast: oklch(0.98 0.01 240);
+  --fallback-sst-nodata: oklch(0.74 0.07 222);
+  --fallback-chl-nodata: oklch(0.78 0.02 230);
+  --ocean-current-stroke: oklch(0.98 0.01 235);
+
+  /* Panel */
+  --panel: oklch(0.15 0.022 238);
+  --panel-foreground: oklch(0.88 0.01 230);
+
+  --chart-1: oklch(0.78 0.15 195);
+  --chart-2: oklch(0.75 0.16 50);
+  --chart-3: oklch(0.72 0.18 145);
+  --chart-4: oklch(0.65 0.14 280);
+  --chart-5: oklch(0.7 0.12 30);
+  --sidebar: oklch(0.15 0.022 238);
+  --sidebar-foreground: oklch(0.88 0.01 230);
+  --sidebar-primary: oklch(0.72 0.14 195);
+  --sidebar-primary-foreground: oklch(0.13 0.02 240);
+  --sidebar-accent: oklch(0.22 0.03 235);
+  --sidebar-accent-foreground: oklch(0.88 0.01 230);
+  --sidebar-border: oklch(0.25 0.03 235);
+  --sidebar-ring: oklch(0.72 0.14 195);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-body);
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+  }
+}
+
+/* Leaflet overrides for dark theme.
+   Fondo neutro oscuro: si fallan los tiles satélite, el espacio sin tiles
+   queda en gris oscuro (no beige) para no competir con los datos. */
+.leaflet-container {
+  background:
+    radial-gradient(
+      circle at 68% 54%,
+      rgba(255, 166, 70, 0.9),
+      rgba(239, 67, 34, 0.88) 34%,
+      transparent 62%
+    ),
+    linear-gradient(135deg, #b5122b 0%, #dc2f25 46%, #f07022 100%) !important;
+}
+
+.leaflet-tile-pane img.leaflet-tile,
+.leaflet-pane img.leaflet-tile-loaded,
+.leaflet-pane .leaflet-tile-loaded {
+  opacity: 1 !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: var(--panel) !important;
+  color: var(--panel-foreground) !important;
+  border-color: var(--border) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: var(--secondary) !important;
+}
+
+.leaflet-control-attribution {
+  background-color: oklch(0.13 0.02 240 / 80%) !important;
+  color: var(--muted-foreground) !important;
+  font-size: 0.625rem !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--primary) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background-color: var(--panel) !important;
+  color: var(--foreground) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 8px 32px oklch(0 0 0 / 40%) !important;
+}
+
+.leaflet-popup-tip {
+  background-color: var(--panel) !important;
+  border: 1px solid var(--border) !important;
+  border-top: none !important;
+  border-left: none !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--muted-foreground) !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: var(--foreground) !important;
+}
+
+/* Compact popup variant — used by hotspots and click-info popup */
+.leaflet-popup.compact-popup .leaflet-popup-content-wrapper {
+  border-radius: 0.5rem !important;
+  padding: 1px !important;
+}
+.leaflet-popup.compact-popup .leaflet-popup-content {
+  margin: 6px 8px !important;
+  font-size: 10px !important;
+  line-height: 1.3 !important;
+  width: auto !important;
+  max-width: 200px !important;
+}
+.leaflet-popup.compact-popup .leaflet-popup-close-button {
+  padding: 2px 4px 0 0 !important;
+  font-size: 14px !important;
+}
+
+/* Layer selector animations */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s ease-out;
+}
+
+/* Glow effects */
+.glow-cyan {
+  box-shadow:
+    0 0 20px oklch(0.78 0.15 195 / 25%),
+    0 0 60px oklch(0.78 0.15 195 / 8%);
+}
+
+.glow-warm {
+  box-shadow:
+    0 0 20px oklch(0.75 0.16 50 / 25%),
+    0 0 60px oklch(0.75 0.16 50 / 8%);
+}
+
+.glow-green {
+  box-shadow:
+    0 0 20px oklch(0.72 0.18 145 / 25%),
+    0 0 60px oklch(0.72 0.18 145 / 8%);
+}
+
+/* Ocean slider – custom range input */
+.ocean-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--muted);
+  border-radius: 9999px;
+  outline: none;
+}
+
+.ocean-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--foreground);
+  border: 2px solid var(--background);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+.ocean-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--foreground);
+  border: 2px solid var(--background);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+/* Smooth interpolation for Copernicus tiles when overzooming.
+   Preferimos `high-quality` (Chrome/Safari → bicubic) y `smooth` como
+   fallback. Evitamos `pixelated` en cualquier zoom. */
+.ocean-tile-smooth,
+.ocean-tile-smooth img,
+.ocean-tile-smooth canvas,
+.leaflet-tile-pane .ocean-tile-smooth,
+.leaflet-tile-pane .ocean-tile-smooth img,
+.leaflet-tile-pane .ocean-tile-smooth canvas {
+  image-rendering: auto !important;
+  image-rendering: smooth !important;
+  image-rendering: high-quality !important;
+  -ms-interpolation-mode: bicubic;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+/* Costa e isobatas en máxima nitidez:
+   - `detectRetina` en Leaflet pide teselas WMS al doble de resolución
+   - aquí forzamos bicubic + sub-pixel anti-alias para que las líneas
+     de contorno (costa, isobatas EMODnet) se vean limpias al hacer zoom
+   - `crisp-edges` se evita: queremos suavizado, no aliasing duro. */
+.bathy-contours-tile,
+.bathy-contours-tile img,
+.bathy-contours-tile canvas,
+.bathy-relief-tile,
+.bathy-relief-tile img,
+.bathy-relief-tile canvas,
+.bathy-hillshade-tile,
+.bathy-hillshade-tile img,
+.bathy-hillshade-tile canvas {
+  image-rendering: auto !important;
+  image-rendering: smooth !important;
+  image-rendering: high-quality !important;
+  -ms-interpolation-mode: bicubic;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Refuerzo costero HD: contornos costeros con antialiasing acentuado y
+   un drop-shadow muy ligero que define el borde de Mallorca/Alcúdia/Palma
+   sin engrosar la línea. */
+.bathy-contours-coastal-hd,
+.bathy-contours-coastal-hd img,
+.bathy-contours-coastal-hd canvas {
+  filter: contrast(1.35) saturate(1.1) brightness(0.92) drop-shadow(0 0 0.4px rgba(0, 30, 60, 0.45));
+}
+
+.bathy-relief-tile-coastal,
+.bathy-relief-tile-coastal img,
+.bathy-relief-tile-coastal canvas {
+  filter: contrast(1.04) saturate(1.06);
+}
+
+/* Truco anti-seam: agrandamos cada tile más generosamente para que sus
+   bordes solapen claramente con los vecinos. Combinado con bicubic + blur
+   sub-pixel mayor, elimina las líneas visibles entre teselas WMTS. */
+.leaflet-tile-pane .ocean-tile-sst img,
+.leaflet-tile-pane .ocean-tile-sst canvas {
+  transform: translateZ(0) scale(1.003);
+  transform-origin: center center;
+}
+
+/* IMPORTANTE: NO aplicar máscaras radiales (radial-gradient) ni clip-path al
+   pane oceánico. La máscara se renderiza sobre el pane completo (un div fijo
+   al viewport interno de Leaflet), creando la ilusión de un "rectángulo
+   flotante desalineado" sobre el mapa. Las teselas WMTS son TileLayer reales:
+   ya se recortan, mueven y zoomean correctamente con el mapa por sí solas. */
+.leaflet-copernicus-pane,
+.ocean-pane-sst,
+.ocean-pane-chl,
+.ocean-pane-alt {
+  background: transparent !important;
+}
+
+.ocean-pane-sst,
+.ocean-pane-chl,
+.ocean-pane-alt {
+  /* sin mask-image — los tiles cubren todo el viewport del mapa */
+}
+
+/* Capas Copernicus combinadas — en modo MULTI las 3 capas deben verse a la
+   vez con MÁXIMA distinción entre ellas. Estrategia: cada capa mantiene su
+   PALETA REAL (blend normal) pero con opacidad parcial, así las tres se
+   superponen como acetatos de colores diferenciados (ALT azul/rojo,
+   CHL verde/amarillo, SST jet). hard-light en SST mantiene contraste térmico
+   alto sin tapar las otras dos.
+     · ALT (abajo)  → normal, opacidad 100%: base de color completa
+     · CHL (medio)  → hard-light + opacidad 75%: aporta verde/rojo de bio
+                      preservando los azules/rojos de altimetría debajo
+     · SST (arriba) → hard-light + opacidad 65%: térmica viva sin tapar
+   En single-layer volvemos a normal + 100% para ver paleta pura. */
+/* FishTrack-style blending: SST como base oceánica suave (soft-light),
+   CHL como nube fina translúcida, ALT (corrientes) muy ligero arriba. */
+/* Estrategia para que las TRES capas sean distinguibles incluso en mares
+   pequeños como el Mediterráneo (rango térmico estrecho, CHL muy baja):
+     · SST (base) → normal 0.7: paleta jet visible pero deja pasar capas arriba
+     · CHL (medio) → multiply + saturación alta: las zonas productivas
+       OSCURECEN la SST con tinte verde/amarillo, claramente distintas del
+       fondo térmico
+     · ALT (arriba) → overlay ligero: añade contraste de corrientes sin tapar */
+.ocean-pane-sst {
+  mix-blend-mode: normal;
+  /* El suavizado va en el pane completo, no en cada tile, para fundir píxeles
+     y costuras sin crear rectángulos recortados por tesela. */
+  filter: saturate(1.12) contrast(1.04) brightness(0.98) blur(2.5px);
+}
+
+.ocean-pane-chl {
+  mix-blend-mode: normal;
+  filter: saturate(2.35) contrast(1.75) brightness(1.04) hue-rotate(-6deg);
+}
+
+body.chl-soft .ocean-pane-chl {
+  mix-blend-mode: soft-light;
+  opacity: 0.7 !important;
+  filter: saturate(1.7) contrast(1.35);
+}
+
+.ocean-pane-alt {
+  /* Antes usábamos color-dodge → sobre el mapa oscuro convertía la altimetría
+     en un velo blanco indistinguible. Con `normal` la paleta RdBu (azul = bajo,
+     rojo = alto) se ve tal cual y se diferencia claramente de SST y CHL. */
+  mix-blend-mode: normal;
+  filter: saturate(2.45) contrast(1.9) brightness(1.08)
+    drop-shadow(0 0 2px rgba(255, 255, 255, 0.28));
+}
+
+/* En modo compare3 dejamos que el preset controle la opacidad real
+   (0.7 / 0.45 / 0.4) — sobrescribimos los !important anteriores. */
+body.ocean-compare3 .ocean-pane-alt,
+body.ocean-compare3 .ocean-pane-chl,
+body.ocean-compare3 .ocean-pane-sst {
+  opacity: revert !important;
+}
+
+/* Cuando solo hay UNA capa activa (modo single), forzamos blend normal
+   y opacidad 100% para que se vea con sus colores reales sin la mezcla. */
+body.ocean-single-layer .ocean-pane-sst,
+body.ocean-single-layer .ocean-pane-chl,
+body.ocean-single-layer .ocean-pane-alt {
+  mix-blend-mode: normal;
+  opacity: 1 !important;
+}
+
+/* Modo COMPARE3 — paletas cromáticamente disjuntas para distinguir las 3
+   capas a la vez. Cada blend mode aísla un canal de color distinto:
+     · ALT (base, normal)        → azules/rojos de altimetría visibles
+     · CHL (multiply)            → SOLO oscurece donde hay verde/clorofila
+     · SST (screen + saturación) → SOLO aclara con cálidos rojos/naranjas
+   No usamos !important para que el slider de opacidad del panel funcione,
+   solo seteamos blend mode + un boost de saturación para máxima distinción. */
+/* En compare3 SST va ARRIBA (z-index 359) con blend normal: su color térmico
+   real (azul→blanco→rojo de jet) siempre se ve. CHL y ALT debajo aportan
+   contexto (biomasa / corrientes) sin tapar la temperatura. */
+/* SST encima con blend `hue`: transfiere SOLO el tono térmico (azul→rojo)
+   a la base, sin tapar la luminosidad ni los detalles de CHL/ALT. Así la
+   temperatura colorea el mapa pero las estructuras finas de las otras
+   capas (filamentos de clorofila, eddies de altimetría) siguen visibles. */
+body.ocean-compare3 .ocean-pane-sst {
+  mix-blend-mode: hue;
+  opacity: 0.7 !important;
+  filter: saturate(1.48) contrast(1.04) blur(2.5px);
+}
+/* Modo "Hue" (por defecto) — también en modo 2 capas (no solo compare3):
+   transfiere solo el tono térmico, manteniendo luminosidad de la capa base. */
+body:not(.ocean-single-layer)[data-sst-blend="hue"] .ocean-pane-sst {
+  mix-blend-mode: normal;
+  opacity: 0.88 !important;
+  filter: saturate(1.55) contrast(1.06) brightness(1.01) blur(2.5px);
+}
+/* Modo "Normal": color térmico puro encima (mejor para T absoluta en zonas
+   con poca variación cromática como el golfo de León). Bajamos opacidad para
+   no tapar CHL/ALT por completo. */
+body:not(.ocean-single-layer)[data-sst-blend="normal"] .ocean-pane-sst {
+  mix-blend-mode: normal;
+  opacity: 0.92 !important;
+  filter: saturate(1.62) contrast(1.08) brightness(1.01) blur(2.5px);
+}
+/* Modo "Multiply": SST oscurece las capas inferiores → resalta masas frías
+   y upwellings (Alborán oeste, golfo de León en invierno). */
+body:not(.ocean-single-layer)[data-sst-blend="multiply"] .ocean-pane-sst {
+  mix-blend-mode: multiply;
+  opacity: 0.85 !important;
+  filter: saturate(1.32) contrast(1.04) blur(2.5px);
+}
+body.ocean-compare3 .ocean-pane-chl {
+  mix-blend-mode: normal;
+  opacity: 0.86 !important;
+  filter: saturate(2.15) hue-rotate(-8deg) contrast(1.55) brightness(1.03);
+}
+body.ocean-compare3 .ocean-pane-alt {
+  mix-blend-mode: normal;
+  opacity: 1 !important;
+  filter: saturate(1.7) contrast(1.45) brightness(1.02);
+}
+
+/* SST FishTrack-style: degradado oceánico suave, sin píxeles cuadrados,
+   sin amarillos fosforitos. Bicubic real (high-quality) + blur sub-pixel
+   para fundir las costuras entre teselas WMTS en cada nivel de zoom. */
+.ocean-tile-sst,
+.ocean-tile-sst img,
+.ocean-tile-sst canvas {
+  filter: none !important;
+  image-rendering: auto !important;
+  image-rendering: smooth !important;
+  image-rendering: high-quality !important;
+  -ms-interpolation-mode: bicubic;
+}
+
+.ocean-tile-sst.high-contrast,
+.ocean-tile-sst.high-contrast img,
+.ocean-tile-sst.high-contrast canvas {
+  filter: none !important;
+  image-rendering: auto !important;
+  image-rendering: smooth !important;
+  image-rendering: high-quality !important;
+}
+
+/* Suavizado a nivel de pane: se mantiene también en single-layer. */
+body.ocean-single-layer .ocean-pane-sst img,
+body.ocean-single-layer .ocean-pane-sst canvas {
+  filter: none !important;
+  image-rendering: auto !important;
+  image-rendering: smooth !important;
+  image-rendering: high-quality !important;
+}
+
+body.ocean-single-layer .ocean-pane-sst {
+  filter: saturate(1.18) contrast(1.06) brightness(0.99) blur(2.5px);
+}
+
+.ocean-front-enhancer-pane,
+.ocean-front-enhancer-canvas {
+  background: transparent !important;
+  pointer-events: none !important;
+}
+
+.ocean-front-enhancer-canvas {
+  left: 0;
+  mix-blend-mode: normal;
+  opacity: 0.42;
+  position: absolute;
+  top: 0;
+  filter: saturate(1.1) contrast(1.08) drop-shadow(0 0 1px rgba(0, 0, 0, 0.35));
+}
+
+.ocean-local-contrast-pane,
+.ocean-local-contrast-canvas {
+  background: transparent !important;
+  pointer-events: none !important;
+}
+
+.ocean-local-contrast-canvas {
+  left: 0;
+  mix-blend-mode: normal;
+  opacity: 0.58;
+  position: absolute;
+  top: 0;
+  filter: saturate(2.1) contrast(1.75) brightness(1.05);
+}
+
+/* Modo lectura estable: sin blends ni overlays derivados del viewport. Los
+   filtros CSS deterministas (saturación/contraste fijos por capa) sí se
+   mantienen para que las capas sigan siendo visibles — no dependen del pan
+   ni del zoom, así que no provocan parpadeo. */
+body.ocean-data-stable .ocean-pane-sst,
+body.ocean-data-stable .ocean-pane-chl,
+body.ocean-data-stable .ocean-pane-alt {
+  mix-blend-mode: normal !important;
+  opacity: 1 !important;
+}
+
+/* CHL en lectura estable: blend normal pero con boost fijo de saturación y
+   contraste para que la paleta turbo (azules/verdes/amarillos) sea legible
+   sobre el fondo oscuro del mapa base. */
+body.ocean-data-stable .ocean-pane-chl,
+body.ocean-data-stable .ocean-tile-chl,
+body.ocean-data-stable .ocean-tile-chl img,
+body.ocean-data-stable .ocean-tile-chl canvas {
+  filter: saturate(2.2) contrast(1.65) brightness(1.04) !important;
+}
+
+body.ocean-data-stable .ocean-pane-sst {
+  filter: saturate(1.12) contrast(1.06) brightness(0.99) blur(2.5px) !important;
+}
+
+body.ocean-data-stable .ocean-tile-sst,
+body.ocean-data-stable .ocean-tile-sst img,
+body.ocean-data-stable .ocean-tile-sst canvas {
+  filter: none !important;
+}
+
+body.ocean-data-stable .ocean-pane-alt,
+body.ocean-data-stable .ocean-tile-alt,
+body.ocean-data-stable .ocean-tile-alt img,
+body.ocean-data-stable .ocean-tile-alt canvas {
+  filter: saturate(1.5) contrast(1.3) !important;
+}
+
+body.ocean-data-stable .ocean-front-enhancer-canvas,
+body.ocean-data-stable .ocean-local-contrast-canvas {
+  display: none !important;
+}
+
+.leaflet-pane.ocean-current-vector-pane,
+.ocean-current-vector-pane svg {
+  background: transparent !important;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 1 !important;
+  overflow: visible;
+}
+
+.ocean-current-streamline {
+  fill: none !important;
+  stroke: #ffffff !important;
+  stroke-width: var(--current-width, 4.5px) !important;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: var(--current-opacity, 1) !important;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 8 10;
+  stroke-dashoffset: 0;
+  animation: ocean-current-flow var(--current-duration, 6s) linear infinite;
+  animation-delay: var(--current-delay, 0s);
+}
+
+.ocean-current-streamline--eddy {
+  stroke-width: calc(var(--current-width, 4.5px) * 1.4) !important;
+  stroke-dasharray: 7 9;
+  opacity: 1 !important;
+  filter: drop-shadow(0 0 2.4px rgba(0, 0, 0, 0.95));
+}
+
+@keyframes ocean-current-flow {
+  from {
+    stroke-dashoffset: 50;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ocean-current-streamline {
+    animation: none;
+  }
+}
+
+/* === Estructuras oceánicas para pesca ===========================
+   Eddies, frentes y TOP zones — opacidades 10–20% para no
+   competir con SST/CHL pero suficientes para identificar
+   estructuras en segundos. */
+.ocean-eddy-marker,
+.ocean-front-marker {
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.ocean-top-zone-halo {
+  vector-effect: non-scaling-stroke;
+  animation: ocean-top-pulse 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.ocean-top-zone-dot {
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px rgba(125, 255, 176, 0.8));
+  pointer-events: none;
+}
+
+@keyframes ocean-top-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform-origin: center;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.ocean-top-zone-label-wrap {
+  background: transparent !important;
+  border: 0 !important;
+  pointer-events: none;
+}
+
+.ocean-top-zone-label {
+  display: inline-block;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #0a1410;
+  background: rgba(125, 255, 176, 0.92);
+  padding: 2px 6px;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -100%);
+}
+
+/* ============================================================
+   BATIMETRÍA PROFESIONAL — EMODnet DTM alta resolución
+   ============================================================
+   Sistema de capas apiladas con estilo "carta náutica 3D":
+     · Relieve (degradado azul + exageración 1.7x vía contraste)
+     · Hillshade multidireccional (multiply, opacidad 50%, contraste alto)
+     · Slope (gradiente azul→amarillo→rojo)
+     · Isobatas multi-densidad (5/10/20/50 m), líneas finas pero nítidas
+   Todos los filtros usan `image-rendering: smooth` para que NO se vean
+   pixeladas al hacer zoom y se mantengan finas en pantallas móviles HiDPI.
+   ============================================================ */
+
+/* Isobatas EMODnet — alto contraste para lectura clara en móvil.
+   Cuatro niveles de densidad (5/10/20/50 m). Drop-shadow añade halo
+   oscuro fino para que las líneas se lean sobre relieve claro y mar oscuro. */
+.bathy-contours-tile img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  filter: grayscale(1) brightness(2.15) contrast(3.15) invert(1)
+    drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.92));
+  mix-blend-mode: screen;
+}
+
+/* Isobatas COSTERAS ULTRA-FINAS (2 m, 0–50 m) — máxima sensibilidad
+   en zonas someras: calas, bajos rocosos, veriles costeros. NO se suaviza
+   (crisp-edges) para no perder microdetalle en la costa. */
+.bathy-contours-coastal img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  filter: grayscale(1) brightness(1.9) contrast(3.4) invert(1) opacity(0.98)
+    drop-shadow(0 0 0.7px rgba(0, 0, 0, 0.96));
+}
+
+/* Isobatas muy finas (5 m, 50–80 m) — translúcidas para no saturar costa. */
+.bathy-contours-shallow img {
+  filter: grayscale(1) brightness(2) contrast(2.2) invert(1) opacity(0.78)
+    drop-shadow(0 0 0.4px rgba(0, 0, 0, 0.7));
+}
+
+/* Isobatas borde de plataforma (10 m, 80–150 m) — bien marcadas. */
+.bathy-contours-shelf img {
+  filter: grayscale(1) brightness(2.4) contrast(2.8) invert(1)
+    drop-shadow(0 0 0.5px rgba(0, 0, 0, 0.85));
+}
+
+/* Isobatas talud (20 m, 150–300 m) — densidad media. */
+.bathy-contours-mid img {
+  filter: grayscale(1) brightness(2.5) contrast(2.9) invert(1)
+    drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.85));
+}
+
+/* Isobatas profundas (50 m, >300 m) — más marcadas → cañones submarinos. */
+.bathy-contours-deep img {
+  filter: grayscale(1) brightness(2.7) contrast(3.4) invert(1)
+    drop-shadow(0 0 0.7px rgba(0, 0, 0, 0.95));
+}
+
+/* Relieve EMODnet DTM — degradado de profundidad con exageración visual ~1.7x.
+   Subimos contraste y saturación para que el volumen del fondo se "lea" en 3D
+   incluso a primer vistazo. Brightness ligeramente bajo profundiza los azules. */
+.bathy-relief-tile img {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: smooth;
+  -ms-interpolation-mode: bicubic;
+  filter: contrast(1.72) saturate(1.25) brightness(0.84);
+}
+
+.bathy-relief-tile-coastal img {
+  filter: contrast(2.2) saturate(1.55) brightness(0.72) hue-rotate(8deg);
+  mix-blend-mode: multiply;
+}
+
+/* Hillshade EMODnet — multidireccional con contraste muy alto.
+   Sombras profundas en talud y cañones, luces marcadas en lomas
+   → relieve 3D claro incluso sobre satélite. */
+.bathy-hillshade-tile img {
+  image-rendering: smooth;
+  -ms-interpolation-mode: bicubic;
+  filter: contrast(2.15) brightness(0.96) saturate(0);
+}
+
+.bathy-hillshade-tile-coastal img {
+  filter: contrast(2.35) brightness(0.88) saturate(0);
+}
+
+/* Slope EMODnet — gradiente azul (plano) → amarillo (transición) → rojo (corte).
+   Más saturación y contraste para que cantiles y veriles se vean al instante. */
+.bathy-slope-tile img {
+  image-rendering: smooth;
+  -ms-interpolation-mode: bicubic;
+  filter: saturate(2.15) contrast(1.9) hue-rotate(-25deg) brightness(1.02);
+}
+
+.bathy-contours-coastal-hd img {
+  filter: grayscale(1) brightness(1.85) contrast(3.7) invert(1) opacity(1)
+    drop-shadow(0 0 0.85px rgba(0, 0, 0, 0.98));
+}
+
+.shallow-bathy-label {
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 14px;
+  text-align: center;
+  text-shadow:
+    0 0 2px #00192c,
+    0 0 4px #00192c,
+    0 1px 1px #00192c;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.bathy-relief-tile,
+.bathy-hillshade-tile,
+.bathy-slope-tile,
+.bathy-contours-tile,
+.leaflet-pane[class*="bathy-"] .leaflet-layer {
+  background: transparent !important;
+}
+
+/* Clorofila: en Mediterráneo oligotrófico los valores son muy bajos
+   (≈0.05–0.2 mg/m³). Subimos saturación y contraste para que filamentos
+   y frentes productivos resalten en lugar de quedar como nube plana. */
+.ocean-tile-chl,
+.ocean-tile-chl img,
+.ocean-tile-chl canvas {
+  filter: saturate(2.05) contrast(2.05) brightness(1.03) blur(0.12px);
+  image-rendering: auto !important;
+  image-rendering: smooth !important;
+  -ms-interpolation-mode: bicubic;
+}
+
+.ocean-tile-chl.high-contrast,
+.ocean-tile-chl.high-contrast img,
+.ocean-tile-chl.high-contrast canvas {
+  filter: saturate(2.45) contrast(2.45) brightness(1) blur(0.08px);
+  image-rendering: auto !important;
+  image-rendering: smooth !important;
+}
+
+/* Altimetría real: definición general, ligera nitidez */
+.ocean-tile-alt,
+.ocean-tile-alt img,
+.ocean-tile-alt canvas {
+  filter: saturate(1.15) contrast(1.18) brightness(1.02);
+}
+
+/* Superficie SLA: sombreado claro tipo carta marina, alto contraste
+   para que las anomalías de altura se lean como relieve oceánico. */
+.ocean-tile-alt-surface,
+.ocean-tile-alt-surface img,
+.ocean-tile-alt-surface canvas {
+  filter: saturate(1) contrast(1.4) brightness(1);
+}
+
+/* Líneas de altimetría / corrientes — convertimos el gradiente del servidor
+   en CONTORNOS NEGROS marcados (estilo carta naútica) para que se vean
+   inequívocamente sobre SST y clorofila. grayscale + contraste alto +
+   drop-shadow refuerzan los bordes de las isolíneas de altura del mar. */
+.ocean-tile-alt-lines,
+.ocean-tile-alt-lines img,
+.ocean-tile-alt-lines canvas {
+  filter: grayscale(0.6) saturate(1.4) contrast(2.2) brightness(0.88)
+    drop-shadow(0 0 0.8px rgba(0, 0, 0, 0.95)) drop-shadow(0 0 0.4px rgba(255, 255, 255, 0.6));
+}
+
+.leaflet-copernicus-pane {
+  pointer-events: none;
+}
+
+/* Smooth basemap (satellite) tiles too */
+.basemap-smooth img,
+.leaflet-tile-pane .basemap-smooth img {
+  image-rendering: auto !important;
+  image-rendering: smooth !important;
+  -ms-interpolation-mode: bicubic;
+}
+
+.basemap-hillshade img,
+.leaflet-tile-pane .basemap-hillshade img {
+  image-rendering: auto !important;
+  image-rendering: smooth !important;
+  -ms-interpolation-mode: bicubic;
+  mix-blend-mode: multiply;
+  /* Antes 0.86 → oscurecía mucho el mar y competía con SST/CHL. Bajamos a
+     0.35 para que el relieve se note pero deje pasar el color de las capas. */
+  opacity: 0.35;
+}
+
+/* Fishing hotspot pulse (used by FishingHotspots.tsx) */
+@keyframes fhpulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.35;
+  }
+}
+.fishing-hotspot-icon {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+/* === UI button stability (mobile touch) ============================
+   Eliminates the 300 ms tap-delay on iOS/Android and prevents the
+   browser's touch-callout/long-press menu from hijacking the first
+   tap on header controls. Applied to every button so the whole UI
+   feels instant and never "bloqueado". */
+button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+/* Compact legend styling */
+.legend {
+  font-size: 12px !important;
+  padding: 6px 8px !important;
+  border-radius: 6px !important;
+}
+.legend h4 {
+  font-size: 13px !important;
+  margin: 0 0 4px 0;
+}
+.legend .scale {
+  height: 6px !important;
+}
+
+/* GPS panel: en móvil reducir un poco el tamaño y anclar arriba a la derecha
+   para no tapar tanto contenido del visor. */
+@media (max-width: 600px) {
+  .gps-panel-shell {
+    transform: scale(0.85);
+    transform-origin: top right;
+  }
+}
+
+/* === Performance optimizations =====================================
+   Reduce GPU/repaint pressure on Totymar viewer (iPhone & desktop). */
+.leaflet-control,
+.leaflet-control-zoom,
+.leaflet-control-attribution {
+  box-shadow: none !important;
+  will-change: auto;
+}
+
+/* Tile pane: hint compositor to use its own layer to avoid full-page
+   repaints when the map pans. */
+.leaflet-tile-pane {
+  will-change: transform;
+}
+
+/* Durante el arrastre el móvil no puede recalcular filtros/halos de todas las
+   capas a la vez. Aligeramos SOLO mientras el dedo mueve el mapa y se restauran
+   los estilos al soltar, evitando tirones sin perder lectura final. */
+body.map-is-moving .ocean-pane-sst,
+body.map-is-moving .ocean-pane-chl,
+body.map-is-moving .ocean-pane-alt,
+body.map-is-moving .ocean-front-enhancer-canvas,
+body.map-is-moving .bathy-relief-tile img,
+body.map-is-moving .bathy-hillshade-tile img,
+body.map-is-moving .bathy-slope-tile img,
+body.map-is-moving .bathy-contours-tile img,
+body.map-is-moving .leaflet-pane canvas.velocity-overlay {
+  filter: none !important;
+}
+
+body.map-is-moving .ocean-front-enhancer-canvas {
+  opacity: 0.18 !important;
+}
+
+body.map-is-moving .leaflet-marker-icon,
+body.map-is-moving .leaflet-interactive {
+  transition: none !important;
+}
+
+/* Mobile tweaks — smaller controls, no bounce, instant taps. */
+@media (max-width: 768px) {
+  .leaflet-control-layers {
+    max-height: 45vh;
+    overflow-y: auto;
+  }
+  .leaflet-container {
+    touch-action: pan-x pan-y;
+  }
+}
+
+body.modo-rapido *,
+body.modo-rapido *::before,
+body.modo-rapido *::after {
+  animation: none !important;
+  transition: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+body.modo-rapido .leaflet-pane canvas.velocity-overlay,
+body.modo-rapido .ocean-tile-sst,
+body.modo-rapido .ocean-tile-sst img,
+body.modo-rapido .ocean-tile-chl,
+body.modo-rapido .ocean-tile-chl img,
+body.modo-rapido .ocean-tile-alt,
+body.modo-rapido .ocean-tile-alt img,
+body.modo-rapido .bathy-relief-tile img,
+body.modo-rapido .bathy-hillshade-tile img,
+body.modo-rapido .bathy-slope-tile img,
+body.modo-rapido .bathy-contours-tile img {
+  filter: none !important;
+}
+
+/* Legibilidad sobre el mapa sin coste de repaint:
+   reemplaza backdrop-blur por text-shadow en los paneles flotantes.
+   text-shadow se compone una sola vez por elemento y NO obliga al
+   navegador a re-muestrear los píxeles del mapa cada frame. */
+.leaflet-container ~ .pointer-events-none .text-foreground,
+.leaflet-container ~ * .text-white,
+.leaflet-container ~ * .text-muted-foreground {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+/* Ocultar la lectura del crosshair cuando el menú lateral está abierto,
+   ya que se solapan visualmente y tapan la sección "Frentes Productivos". */
+body:has(aside[data-app-menu-open="true"]) .crosshair-readout {
+  display: none !important;
+}
+
+/* Triple-frente hotspot pulse: FSLE + CHL + SST coinciden */
+@keyframes hotspot-triple-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  70% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+.hotspot-triple-ring {
+  pointer-events: none;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px #fbbf24,
+    0 0 12px 2px rgba(251, 191, 36, 0.85);
+  animation: hotspot-triple-pulse 1.8s ease-out infinite;
+}
+.hotspot-triple-badge {
+  pointer-events: none;
+  font:
+    700 10px system-ui,
+    sans-serif;
+  color: #0f172a;
+  background: linear-gradient(135deg, #fde047, #f97316);
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
+/* ── Estructuras del fondo marino detectadas automáticamente ───────── */
+.seafloor-structure-icon {
+  pointer-events: none;
+}
+.sf-struct {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font:
+    700 11px system-ui,
+    sans-serif;
+  color: #08243d;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1.5px solid #08243d;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+.sf-struct em {
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  font:
+    600 9px system-ui,
+    sans-serif;
+  font-style: normal;
+  white-space: nowrap;
+  color: #f8fafc;
+  background: rgba(8, 36, 61, 0.78);
+  padding: 1px 5px;
+  border-radius: 6px;
+}
+.sf-bajo,
+.sf-cima {
+  background: #fde68a;
+  border-color: #b45309;
+}
+.sf-veril {
+  background: #fecaca;
+  border-color: #b91c1c;
+}
+.sf-canon {
+  background: #bfdbfe;
+  border-color: #1d4ed8;
+}
+.sf-agujero {
+  background: #ddd6fe;
+  border-color: #6d28d9;
+}
+.sf-meseta {
+  background: #d9f99d;
+  border-color: #4d7c0f;
+}
+
+/* Durante la pantalla de navegación: ocultar todo overlay flotante del mapa
+   (lectura oceanográfica, popups, tooltips y controles) para que no tape
+   los indicadores. Se restaura al cerrar la navegación. */
+body.navigation-active .crosshair-readout,
+body.navigation-active .leaflet-popup,
+body.navigation-active .leaflet-tooltip,
+body.navigation-active .leaflet-control-container {
+  display: none !important;
+}
+
+/* Mientras el asistente de IA está abierto: ocultar todos los overlays
+   flotantes del mapa (lectura oceanográfica, popups, tooltips, controles y
+   paneles/botones flotantes) para que nada quede por encima del asistente.
+   Se restaura al cerrar o contraer la IA. */
+body.ai-advisor-active .crosshair-readout,
+body.ai-advisor-active .leaflet-popup,
+body.ai-advisor-active .leaflet-tooltip,
+body.ai-advisor-active .leaflet-control-container,
+body.ai-advisor-active #app-map-root > .absolute {
+
+  display: none !important;
+}
+
+/* Atribución obligatoria de la batimetría real IHM MBAR24 (16 m) en el mapa 2D. */
+.mbar24-attrib {
+  position: absolute;
+  left: 8px;
+  bottom: 42px;
+  z-index: 500;
+  pointer-events: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background) / 0.82);
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 4px hsl(var(--foreground) / 0.15);
+  white-space: nowrap;
+}
+/* Indicador discreto mientras se descarga la batimetría: la carta anterior
+   permanece visible (nunca pantalla en blanco). */
+.mbar24-loading {
+  position: absolute;
+  left: 8px;
+  bottom: 68px;
+  z-index: 500;
+  pointer-events: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background) / 0.82);
+  border: 1px solid hsl(var(--border));
+  white-space: nowrap;
+}
+body.navigation-active .mbar24-attrib,
+body.ai-advisor-active .mbar24-attrib,
+body.navigation-active .mbar24-loading,
+body.ai-advisor-active .mbar24-loading {
+  display: none !important;
+}
+
+

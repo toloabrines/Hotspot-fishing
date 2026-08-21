@@ -1,0 +1,88 @@
+workflows:
+  ios-testflight:
+    name: iOS TestFlight
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: codemagic_asc_api_key
+
+    environment:
+      groups:
+        - certificate-private-key
+        - APP_STORE_CONNECT_KEY_ID
+      vars:
+        APP_STORE_APPLE_ID: "6771454287"
+        BUNDLE_ID: "app.lovable.hotspotfishing"
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+        CI: "true"
+      node: 22
+      xcode: 16.2
+      cocoapods: default
+
+    cache:
+      cache_paths:
+        - ~/.npm
+        - $HOME/Library/Caches/CocoaPods
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+
+    scripts:
+      - name: Install npm dependencies
+        script: |
+          set -e
+          npm ci
+
+      - name: Build web app
+        script: |
+          set -e
+          npm run build
+
+      - name: Sync Capacitor iOS
+        script: |
+          set -e
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        script: |
+          set -e
+          cd ios/App
+          pod install
+          cd ../..
+
+      - name: Set up code signing
+        script: |
+          set -e
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Build IPA
+        script: |
+          set -e
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - ios/App/build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
+
