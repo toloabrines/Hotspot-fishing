@@ -76,7 +76,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
 
       - name: Install JS deps
         run: npm install --ignore-scripts
@@ -167,4 +166,3 @@ jobs:
           echo "⚠ Build release solicitado pero faltan secretos de firma."
           echo "Añade ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS y ANDROID_KEY_PASSWORD en Settings → Secrets."
           exit 1
-

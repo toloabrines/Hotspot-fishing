@@ -79,7 +79,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
 
       - name: Install JS deps
         run: npm install --ignore-scripts
@@ -264,4 +263,3 @@ jobs:
           echo "⚠ El job de iOS se saltó porque faltan uno o más secretos de Apple."
           echo "Añádelos en Settings → Secrets and variables → Actions para habilitar la build de iOS."
           echo "El job web continúa ejecutándose con normalidad."
-
