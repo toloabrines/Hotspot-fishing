@@ -236,8 +236,11 @@ export function Mbar24BathymetryLayer({
       // redondeo de cada bloque dejaba franjas verticales/horizontales.
       const topY = map.latLngToContainerPoint([grid.north, grid.west]).y;
       const botY = map.latLngToContainerPoint([grid.south, grid.west]).y;
+      // Aclarado visual suave de MBAR24: mejora la lectura en iPhone sin
+      // modificar profundidades, hillshade, resolución ni datos de la hoja.
+      ctx.filter = "brightness(1.12) saturate(1.04)";
       ctx.drawImage(src, 0, 0, grid.cols, grid.rows, leftX, topY, w, botY - topY);
-
+      ctx.filter = "none";
 
       ctx.globalAlpha = 1;
     }
