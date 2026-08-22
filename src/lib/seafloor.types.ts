@@ -34,6 +34,8 @@ export interface SeafloorSettings {
   reliefBoost?: number;
   /** Contraste general de la carta (0.5 = suave, 1 = normal, 2 = muy marcado). */
   contrast?: number;
+  /** Pasadas de suavizado visual. Si se omite, conserva el comportamiento actual. */
+  smoothingPasses?: number;
 }
 
 
@@ -53,5 +55,4 @@ export const DEFAULT_SEAFLOOR: SeafloorSettings = {
   focusRadiusM: 800,
   microRelief: true,
 };
-
 

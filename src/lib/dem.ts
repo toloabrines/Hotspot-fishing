@@ -420,6 +420,79 @@ export async function fetchDemGrid(
   return p;
 }
 
+/**
+ * Descarga directa de la cobertura MBAR24/IHM.
+ *
+ * Usa una URL y una clave de caché propias para no reutilizar respuestas DEM
+ * fusionadas antiguas. Los demás consumidores continúan usando fetchDemGrid.
+ */
+export async function fetchMbar24Grid(
+  bbox: DemBBox,
+  size = 320,
+  signal?: AbortSignal,
+): Promise<DemGrid | null> {
+  const key = `mbar24|${keyFor(bbox, size)}`;
+  const hit = memCache.get(key);
+  if (hit) return hit;
+  const pending = inflight.get(key);
+  if (pending) return pending;
+
+  const p = (async () => {
+    try {
+      const url =
+        `/api/dem?s=${bbox.south.toFixed(4)}&w=${bbox.west.toFixed(4)}` +
+        `&n=${bbox.north.toFixed(4)}&e=${bbox.east.toFixed(4)}&size=${size}` +
+        `&source=mbar24&v=mbar-fast-1`;
+
+      type DemResponse = {
+        cols: number;
+        rows: number;
+        south: number;
+        west: number;
+        north: number;
+        east: number;
+        source?: string;
+        sources?: DemSourceInfo[];
+        resolutionM?: number;
+        coverage?: number;
+        mbar24?: Mbar24Status | null;
+        elev: (number | null)[];
+      };
+
+      const cached = (await readDemCache(url)) as DemResponse | null;
+      let json = cached?.mbar24?.loaded && cached.elev?.length ? cached : null;
+
+      if (!json) {
+        json = await withDemSlot(async () => {
+          if (signal?.aborted) return null;
+          const res = await fetch(url, { signal });
+          if (!res.ok) return null;
+          const body = (await res.json()) as DemResponse;
+          if (!body?.mbar24?.loaded || !body.elev?.length) return null;
+          void writeDemCache(url, body);
+          return body;
+        });
+      }
+
+      if (!json?.mbar24?.loaded || !json.elev?.length) return null;
+      const grid = new DemGrid(json);
+      memCache.set(key, grid);
+      if (memCache.size > 24) {
+        const first = memCache.keys().next().value;
+        if (first) memCache.delete(first);
+      }
+      return grid;
+    } catch {
+      return null;
+    } finally {
+      inflight.delete(key);
+    }
+  })();
+
+  inflight.set(key, p);
+  return p;
+}
+
 /** Redondea la bbox a una rejilla estable para maximizar los aciertos de caché. */
 export function snapBBox(b: DemBBox, step = 0.02): DemBBox {
   const f = (v: number, dir: 1 | -1) =>
@@ -471,4 +544,3 @@ export function applySoundingsToGrid(grid: DemGrid, datasets: SonarDataset[]): D
     elev,
   });
 }
-

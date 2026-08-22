@@ -486,6 +486,97 @@ export const Route = createFileRoute("/api/dem")({
         const cols = Math.max(32, Math.min(1280, Math.round(aspect >= 1 ? size : size * aspect)));
         const rows = Math.max(32, Math.min(1280, Math.round(aspect >= 1 ? size / aspect : size)));
 
+        // Vía rápida exclusiva para la capa 2D MBAR24. Esa capa ya recorta el
+        // bbox a la hoja IHM, por lo que no debe esperar fuentes externas.
+        if (url.searchParams.get("source") === "mbar24") {
+          const expectedSheet = expectedMbar24Sheet(s, w, n, e);
+          const mbar = await fetchMbar24(url.origin, s, w, n, e, cols, rows).catch(
+            (err): Mbar24Result => ({
+              grid: null,
+              sheet: null,
+              cells: 0,
+              reason: `Error leyendo teselas MBAR24: ${String(err)}`,
+            }),
+          );
+          const sheet = mbar.sheet;
+          const mbarStatus: Mbar24Status = {
+            expected: expectedSheet != null,
+            sheet: sheet?.sheet ?? expectedSheet?.sheet ?? null,
+            loaded: mbar.grid != null && mbar.cells > 0,
+            cells: mbar.cells,
+            reason:
+              mbar.grid != null && mbar.cells > 0
+                ? null
+                : (mbar.reason ?? "No se pudo cargar la cobertura MBAR24."),
+          };
+
+          if (!mbar.grid || !sheet || mbar.cells <= 0) {
+            return new Response(JSON.stringify({ error: "mbar24-unavailable", mbar24: mbarStatus }), {
+              status: 503,
+              headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json",
+                "Cache-Control": "no-store",
+              },
+            });
+          }
+
+          const merged = resample(mbar.grid, cols, rows);
+          const elev = new Array<number | null>(merged.length);
+          let valid = 0;
+          for (let i = 0; i < merged.length; i++) {
+            const value = merged[i];
+            if (Number.isFinite(value)) {
+              elev[i] = Math.round(value * 10) / 10;
+              valid++;
+            } else {
+              elev[i] = null;
+            }
+          }
+
+          const nativeResM = sheet.nativeResM ?? 16;
+          const cellM = ((n - s) * 110540) / rows;
+          const license = DEM_SOURCE_LICENSES.mbar24;
+          const label = `MBAR24 IHM ${sheet.sheet} (${nativeResM} m)`;
+          const sourceInfo = {
+            id: "mbar24",
+            label,
+            resM: nativeResM,
+            cells: valid,
+            provider: license?.provider ?? sheet.provider ?? null,
+            license: license?.license ?? sheet.license ?? null,
+            commercialUse: license?.commercialUse ?? null,
+            attribution: license?.attribution ?? sheet.attribution ?? label,
+            url: license?.url ?? null,
+          };
+
+          return new Response(
+            JSON.stringify({
+              cols,
+              rows,
+              south: s,
+              west: w,
+              north: n,
+              east: e,
+              source: "mbar24",
+              sources: [sourceInfo],
+              attribution: sourceInfo.attribution,
+              coverage: Math.round((valid / Math.max(1, merged.length)) * 100) / 100,
+              resolutionM: Math.max(nativeResM, Math.round(cellM)),
+              mbar24: { ...mbarStatus, cells: valid, loaded: valid > 0 },
+              elev,
+            }),
+            {
+              status: 200,
+              headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json",
+                "Cache-Control": "public, max-age=86400",
+              },
+            },
+          );
+        }
+
         // Todas las fuentes en paralelo — luego se combinan por prioridad.
         const [mbar, emodMean, emodPrev, ncei, terra] = await Promise.all([
           fetchMbar24(url.origin, s, w, n, e, cols, rows).catch(
@@ -646,4 +737,3 @@ export const Route = createFileRoute("/api/dem")({
     },
   },
 });
-
