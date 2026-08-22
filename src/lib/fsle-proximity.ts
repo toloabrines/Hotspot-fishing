@@ -27,19 +27,24 @@ export interface FsleField {
   proximity(lat: number, lng: number): number;
   /** Distancia en millas náuticas a la línea más cercana (null si no hay). */
   distanceNm(lat: number, lng: number): number | null;
+  /** Proyección exacta sobre la cresta FSLE más cercana. */
+  nearestPoint(
+    lat: number,
+    lng: number,
+  ): { lat: number; lng: number; distanceNm: number; intensity: number } | null;
 }
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-/** Distancia punto-segmento en grados equivalentes corregidos por latitud. */
-function pointSegmentKm(
+/** Punto exacto del segmento más cercano a la coordenada. */
+function pointSegmentProjection(
   lat: number,
   lng: number,
   aLat: number,
   aLng: number,
   bLat: number,
   bLng: number,
-): number {
+): { km: number; lat: number; lng: number } {
   const kx = 111.32 * Math.cos((lat * Math.PI) / 180);
   const ky = 110.57;
   const px = (lng - aLng) * kx;
@@ -47,9 +52,12 @@ function pointSegmentKm(
   const vx = (bLng - aLng) * kx;
   const vy = (bLat - aLat) * ky;
   const len2 = vx * vx + vy * vy;
-  if (len2 <= 1e-9) return Math.hypot(px, py);
-  const t = Math.max(0, Math.min(1, (px * vx + py * vy) / len2));
-  return Math.hypot(px - t * vx, py - t * vy);
+  const t = len2 <= 1e-9 ? 0 : Math.max(0, Math.min(1, (px * vx + py * vy) / len2));
+  return {
+    km: Math.hypot(px - t * vx, py - t * vy),
+    lat: aLat + (bLat - aLat) * t,
+    lng: aLng + (bLng - aLng) * t,
+  };
 }
 
 interface FsleFeatureCollection {
@@ -128,14 +136,19 @@ export async function buildFsleField(args: {
 
   const MAX_KM = 11; // ~6 millas náuticas
 
-  const nearest = (lat: number, lng: number): { km: number; intensity: number } | null => {
-    let best: { km: number; intensity: number } | null = null;
+  const nearest = (
+    lat: number,
+    lng: number,
+  ): { km: number; intensity: number; lat: number; lng: number } | null => {
+    let best: { km: number; intensity: number; lat: number; lng: number } | null = null;
     for (const s of segments) {
       // Descarte rápido por caja para no medir todos los segmentos.
       if (Math.abs(s.aLat - lat) > 0.2 && Math.abs(s.bLat - lat) > 0.2) continue;
       if (Math.abs(s.aLng - lng) > 0.25 && Math.abs(s.bLng - lng) > 0.25) continue;
-      const km = pointSegmentKm(lat, lng, s.aLat, s.aLng, s.bLat, s.bLng);
-      if (!best || km < best.km) best = { km, intensity: s.intensity };
+      const projected = pointSegmentProjection(lat, lng, s.aLat, s.aLng, s.bLat, s.bLng);
+      if (!best || projected.km < best.km) {
+        best = { ...projected, intensity: s.intensity };
+      }
     }
     return best;
   };
@@ -145,6 +158,12 @@ export async function buildFsleField(args: {
     distanceNm(lat, lng) {
       const n = nearest(lat, lng);
       return n ? n.km / 1.852 : null;
+    },
+    nearestPoint(lat, lng) {
+      const n = nearest(lat, lng);
+      return n
+        ? { lat: n.lat, lng: n.lng, distanceNm: n.km / 1.852, intensity: n.intensity }
+        : null;
     },
     proximity(lat, lng) {
       if (segments.length === 0) return 0;
@@ -162,6 +181,7 @@ export function emptyFsleField(): FsleField {
     segments: [],
     proximity: () => 0,
     distanceNm: () => null,
+    nearestPoint: () => null,
   };
 }
 

@@ -3795,7 +3795,14 @@ function HotspotsRenderer({
           //    básico (tierra / agua imposible), que ya está aplicado
           //    arriba (isLand + isCoastTooClose + MIN_OCEAN_DEPTH).
           //  · Top 1 superficie ≠ Top 1 fondo (rama totalmente independiente).
-          const envS = envAt(cell.lat, cell.lng);
+          // Top 1 de superficie debe quedar sobre la MISMA cresta FSLE que
+          // se dibuja en el mapa. Proyectamos cada candidato a la línea real;
+          // si no hay FSLE en el área, no inventamos un punto.
+          const fsleSnap = fsleFieldToday.nearestPoint(cell.lat, cell.lng);
+          if (!fsleSnap || fsleSnap.distanceNm > 6) continue;
+          const surfaceLat = fsleSnap.lat;
+          const surfaceLng = fsleSnap.lng;
+          const envS = envAt(surfaceLat, surfaceLng);
           const grad = computeSurfaceGradientScore(sF, envS.fsle, envS.persistencia);
 
           // Filtro batimétrico BÁSICO (no decide ranking, solo descarta
@@ -3895,6 +3902,7 @@ function HotspotsRenderer({
             chl: "clorofila",
           };
           const reasons: string[] = [
+            "Top 1 ajustado sobre una cresta FSLE visible",
             "Top 1 elegido por coincidencia de gradientes de SST, CHL y altimetría",
           ];
           if (grad.score < 35 && sF.fallbackSignal > 0) {
@@ -3915,8 +3923,8 @@ function HotspotsRenderer({
           scored.push({
             r,
             c,
-            lat: cell.lat,
-            lng: cell.lng,
+            lat: surfaceLat,
+            lng: surfaceLng,
             bottom: bF,
             surface: sF,
             breakdown,
@@ -4032,7 +4040,7 @@ function HotspotsRenderer({
 
       // En SUPERFICIE no hay mínimo duro: si hay mar válido debe salir Top 1,
       // aunque los gradientes sean débiles y se marque como baja confianza.
-      const HARD_MIN_SURFACE = 0;
+      const HARD_MIN_SURFACE = 25;
       // En SUPERFICIE: pool amplio y sin corte por profundidad/score.
       // Si hay mar válido, debe salir Top 1; la batimetría solo informa el popup.
       const preLimit = fishingMode === "surface" ? 60 : limit;
@@ -4074,7 +4082,10 @@ function HotspotsRenderer({
           for (const s of rest) {
             let tooClose = false;
             for (const p of picked) {
-              if (p.r === s.r && p.c === s.c) {
+              if (
+                (p.r === s.r && p.c === s.c) ||
+                distanceMeters(p.lat, p.lng, s.lat, s.lng) < 500
+              ) {
                 tooClose = true;
                 break;
               }
@@ -4794,7 +4805,13 @@ function HotspotsRenderer({
 
         // ─── SUPERFICIE: recálculo con motor de gradientes ───
         if (fishingMode === "surface") {
-          const grad2 = computeSurfaceGradientScore(s.surface);
+          const fsleNow = fsleFieldToday.proximity(s.lat, s.lng);
+          const fslePrev = fsleFieldPrev.proximity(s.lat, s.lng);
+          const fslePersistence =
+            fsleNow <= 0 && fslePrev <= 0
+              ? 0
+              : Math.min(fsleNow, fslePrev) * 0.7 + fsleNow * 0.3;
+          const grad2 = computeSurfaceGradientScore(s.surface, fsleNow, fslePersistence);
           let pen2 = 0;
           if (s.bottom.hasBathy && s.bottom.depthM != null) {
             if (s.bottom.depthM < 30) pen2 += 25;
@@ -4840,6 +4857,7 @@ function HotspotsRenderer({
             chl: "clorofila",
           };
           const reasons2: string[] = [
+            "Top 1 confirmado sobre una cresta FSLE visible",
             "Top 1 elegido por coincidencia de gradientes de SST, CHL y altimetría",
           ];
           if (grad2.score < 35 && s.surface.fallbackSignal > 0) {
@@ -4916,11 +4934,20 @@ function HotspotsRenderer({
           s.breakdown = breakdown2;
         }
 
-        // e) Aplicar de nuevo el corte mínimo. En superficie SIN excepciones:
-        //    si el score post-validación cae por debajo de HARD_MIN_SURFACE,
-        //    descartamos también al primer candidato (no fallback engañoso).
-        if (fishingMode === "surface" && s.breakdown.scoreTotal < HARD_MIN_SURFACE) {
-          continue;
+        // e) Top 1 de superficie solo es válido con datos oceanográficos
+        // suficientes y a ≤500 m de la cresta FSLE. Las capas se activan
+        // automáticamente; si sus datos no llegan, se muestra "sin zona clara".
+        if (fishingMode === "surface") {
+          const fsleDistanceNm = fsleFieldToday.distanceNm(s.lat, s.lng);
+          const fsleDistanceM = fsleDistanceNm == null ? null : fsleDistanceNm * 1852;
+          if (
+            newSurfaceLayersCount < 2 ||
+            fsleDistanceM == null ||
+            fsleDistanceM > 500 ||
+            s.breakdown.scoreTotal < HARD_MIN_SURFACE
+          ) {
+            continue;
+          }
         }
         validatedPicked.push(s);
       }
@@ -4985,31 +5012,6 @@ function HotspotsRenderer({
           rescue = pool.find((s) => isValidLatLng(s.lat, s.lng));
         }
         if (rescue) validatedPicked.push(rescue);
-      }
-      if (validatedPicked.length === 0 && fishingMode === "surface") {
-        const rescuePool = (surfaceCandidates.length > 0 ? surfaceCandidates : scored).filter((s) =>
-          isValidLatLng(s.lat, s.lng),
-        );
-        const rescue = rescuePool[0];
-        if (rescue) {
-          rescue.breakdown.scoreTotal = safeScore100(rescue.breakdown.scoreTotal);
-          rescue.breakdown.scoreSuperficie = safeScore100(rescue.breakdown.scoreSuperficie);
-          rescue.breakdown.reasons =
-            rescue.breakdown.reasons.length > 0
-              ? rescue.breakdown.reasons
-              : ["Top 1 elegido por fallback con SST, CHL o altimetría disponible"];
-          if (!rescue.breakdown.surfaceGradientDominant && rescue.surface.fallbackDominant) {
-            rescue.breakdown.surfaceGradientDominant = rescue.surface.fallbackDominant;
-          }
-          validatedPicked.push(rescue);
-          console.log("[FishingHotspots/Top1] fallback rescue aplicado", {
-            lat: rescue.lat,
-            lng: rescue.lng,
-            score: rescue.breakdown.scoreTotal,
-            fallbackSignal: rescue.surface.fallbackSignal,
-            layers: rescue.breakdown.layersUsed,
-          });
-        }
       }
       const finalMinScore = isSquid || isDrift ? 0 : 25;
       const finalPicked = validatedPicked.filter((s) =>
