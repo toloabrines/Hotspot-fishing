@@ -315,14 +315,19 @@ async function fetchMbar24(
     })();
 
     mbarTileCache.set(cacheKey, pending);
-    void pending.then((tile) => {
-      if (!tile) mbarTileCache.delete(cacheKey);
-      while (mbarTileCache.size > MBAR24_TILE_CACHE_LIMIT) {
-        const oldest = mbarTileCache.keys().next().value;
-        if (oldest) mbarTileCache.delete(oldest);
-        else break;
-      }
-    });
+    void pending
+      .then((tile) => {
+        if (!tile) mbarTileCache.delete(cacheKey);
+        while (mbarTileCache.size > MBAR24_TILE_CACHE_LIMIT) {
+          const oldest = mbarTileCache.keys().next().value;
+          if (oldest) mbarTileCache.delete(oldest);
+          else break;
+        }
+      })
+      .catch(() => {
+        // Un fallo temporal no queda memorizado: el siguiente intento puede recuperar la tesela.
+        mbarTileCache.delete(cacheKey);
+      });
     return pending;
   };
 
