@@ -1,0 +1,16 @@
+name: iOS Build and Upload to App Store
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Legacy workflow disabled
+    runs-on: macos-latest
+
+    steps:
+      - name: Use the maintained iOS workflow
+        run: |
+          echo "Este workflow antiguo queda desactivado para no subir builds sin el plugin nativo EarthShare."
+          echo "Usa '.github/workflows/ios-testflight.yml', que compila el proyecto iOS completo y sube a TestFlight/App Store Connect."
+

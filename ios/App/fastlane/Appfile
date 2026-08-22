@@ -1,0 +1,5 @@
+app_identifier(ENV["APPLE_BUNDLE_ID"] || "app.lovable.hotspotfishing")
+apple_id(ENV["APPLE_ID"])
+team_id(ENV["APPLE_TEAM_ID"])
+itc_team_id(ENV["APPLE_ITC_TEAM_ID"])
+

@@ -1,0 +1,11 @@
+# Hotspot Fishing — fastlane Appfile
+# Lee los valores desde variables de entorno definidas como GitHub Secrets.
+# No pongas IDs ni emails hardcodeados aquí.
+
+app_identifier(ENV["IOS_BUNDLE_ID"])           # ej. app.lovable.hotspotfishing
+apple_id(ENV["APPLE_ID"]) if ENV["APPLE_ID"]   # opcional: email de tu cuenta Apple
+team_id(ENV["APPLE_TEAM_ID"])                  # Apple Developer Team ID (10 chars)
+
+# itc_team_id solo si tu cuenta pertenece a varios equipos en App Store Connect
+itc_team_id(ENV["ITC_TEAM_ID"]) if ENV["ITC_TEAM_ID"]
+

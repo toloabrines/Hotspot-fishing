@@ -1,0 +1,1279 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { DemGrid } from "../lib/dem";
+
+interface Props {
+  grid: DemGrid | null;
+  onClose: () => void;
+  /** Posición GPS para marcar el barco sobre el relieve. */
+  gpsPosition?: { lat: number; lng: number } | null;
+  /** El relieve se recarga centrado en el barco mientras navega. */
+  followGps?: boolean;
+  /** Alterna el seguimiento del barco (lo gestiona el mapa). */
+  onToggleFollowGps?: (next: boolean) => void;
+}
+
+type RGB = [number, number, number];
+
+const PALETTE: { d: number; c: RGB }[] = [
+  { d: 0, c: [246, 236, 205] },
+  { d: 10, c: [222, 214, 172] },
+  { d: 25, c: [160, 200, 190] },
+  { d: 50, c: [104, 173, 196] },
+  { d: 90, c: [70, 138, 184] },
+  { d: 150, c: [50, 106, 163] },
+  { d: 300, c: [36, 78, 134] },
+  { d: 600, c: [24, 54, 102] },
+  { d: 1200, c: [15, 35, 74] },
+  { d: 2500, c: [8, 20, 48] },
+];
+
+function rampColor(depth: number): RGB {
+  if (depth <= PALETTE[0].d) return PALETTE[0].c;
+  const last = PALETTE[PALETTE.length - 1];
+  if (depth >= last.d) return last.c;
+  for (let i = 1; i < PALETTE.length; i++) {
+    if (depth <= PALETTE[i].d) {
+      const a = PALETTE[i - 1];
+      const b = PALETTE[i];
+      const t = (depth - a.d) / Math.max(1e-6, b.d - a.d);
+      return [
+        a.c[0] + (b.c[0] - a.c[0]) * t,
+        a.c[1] + (b.c[1] - a.c[1]) * t,
+        a.c[2] + (b.c[2] - a.c[2]) * t,
+      ];
+    }
+  }
+  return last.c;
+}
+
+function niceStep(range: number): number {
+  const raw = range / 6;
+  const pow = Math.pow(10, Math.floor(Math.log10(Math.max(1, raw))));
+  const n = raw / pow;
+  const m = n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10;
+  return m * pow;
+}
+
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 12;
+const clampZoom = (z: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+
+/**
+ * Vista 3D profesional del relieve del fondo de la zona visible.
+ * Proyección en perspectiva, iluminación por normales, isóbatas drapeadas,
+ * zócalo sólido y HUD con escala de profundidad y norte.
+ * (El mapa 2D de Leaflet no puede inclinarse, por eso se muestra aparte.)
+ */
+export function Seafloor3DView({
+  grid,
+  onClose,
+  gpsPosition,
+  followGps = false,
+  onToggleFollowGps,
+}: Props) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [yaw, setYaw] = useState(0);
+  // Perspectiva real por defecto (82° era casi cenital y parecía un mapa 2D).
+  const [tilt, setTilt] = useState(52);
+  // Con un dedo: mover la imagen (navegar). En modo "girar": orbitar/inclinar.
+  const [dragMode, setDragMode] = useState<"mover" | "girar">("mover");
+  const dragModeRef = useRef(dragMode);
+  dragModeRef.current = dragMode;
+  // Posición en pantalla (px CSS) del barco en el último repintado.
+  const gpsScreenRef = useRef<{ x: number; y: number; inside: boolean } | null>(null);
+  const viewSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const [exaggeration, setExaggeration] = useState(3);
+  const [sunAz, setSunAz] = useState(315);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [contours, setContours] = useState(true);
+  const [microRelief, setMicroRelief] = useState(true);
+  const [detailStrength, setDetailStrength] = useState(1.2);
+  const [readout, setReadout] = useState<string | null>(null);
+  // Recorte manual de profundidad (m). null = automático por percentiles.
+  const [clipMin, setClipMin] = useState<number | null>(null);
+  const [clipMax, setClipMax] = useState<number | null>(null);
+  // Sensibilidad del gesto de giro/inclinación (1 = suave, 5 = rápido).
+  const [sensitivity, setSensitivity] = useState(1);
+  const sensRef = useRef(sensitivity);
+  sensRef.current = sensitivity;
+  const dragRef = useRef<{ x: number; y: number } | null>(null);
+  const movedRef = useRef(false);
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ distance: number; x: number; y: number } | null>(null);
+  const zoomRef = useRef(zoom);
+  const panRef = useRef(pan);
+  const resizeFrameRef = useRef<number | null>(null);
+  const resizeTimerRef = useRef<number | null>(null);
+  zoomRef.current = zoom;
+  panRef.current = pan;
+
+  const setAnchoredZoom = useCallback((nextZoom: number, anchorX: number, anchorY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const currentZoom = zoomRef.current;
+    const currentPan = panRef.current;
+    const next = clampZoom(nextZoom);
+    const k = next / Math.max(0.001, currentZoom);
+    const localX = anchorX - rect.left;
+    const localY = anchorY - rect.top;
+    const nextPan = {
+      x: localX - cx - (localX - cx - currentPan.x) * k,
+      y: localY - cy - (localY - cy - currentPan.y) * k,
+    };
+    zoomRef.current = next;
+    panRef.current = nextPan;
+    setZoom(next);
+    setPan(nextPan);
+  }, []);
+
+  const stats = useMemo(() => {
+    if (!grid) return null;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    let n = 0;
+    const samples: number[] = [];
+    for (let i = 0; i < grid.elev.length; i++) {
+      const v = grid.elev[i];
+      if (!Number.isFinite(v) || v >= 0) continue;
+      n++;
+      if (samples.length < 12000 || i % Math.max(1, Math.floor(grid.elev.length / 12000)) === 0) {
+        samples.push(v);
+      }
+      if (v < minZ) minZ = v;
+      if (v > maxZ) maxZ = v;
+    }
+    if (!n || !Number.isFinite(minZ)) return null;
+    samples.sort((a, b) => a - b);
+    const p02 = samples[Math.floor((samples.length - 1) * 0.02)] ?? minZ;
+    const p98 = samples[Math.floor((samples.length - 1) * 0.98)] ?? maxZ;
+    return { minDepth: -maxZ, maxDepth: -minZ, minZ, maxZ, robustMinZ: p02, robustMaxZ: p98 };
+  }, [grid]);
+
+  const draw = useCallback(
+    (targetRes: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+      const W = canvas.clientWidth;
+      const H = canvas.clientHeight;
+      // Durante la rotación del móvil el layout puede reportar 0 px: no
+      // redimensionamos el lienzo (se quedaría en blanco), reintentamos luego.
+      if (W < 2 || H < 2) return;
+      viewSizeRef.current = { w: W, h: H };
+      const nextW = Math.max(1, Math.round(W * dpr));
+      const nextH = Math.max(1, Math.round(H * dpr));
+      if (canvas.width !== nextW) canvas.width = nextW;
+      if (canvas.height !== nextH) canvas.height = nextH;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+
+      // Fondo de estudio: cielo profundo + halo suave tras el relieve.
+      const bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, "#06182a");
+      bg.addColorStop(0.5, "#04111e");
+      bg.addColorStop(1, "#01070e");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+      const halo = ctx.createRadialGradient(
+        W / 2,
+        H * 0.52,
+        10,
+        W / 2,
+        H * 0.52,
+        Math.max(W, H) * 0.62,
+      );
+      halo.addColorStop(0, "rgba(56,132,180,0.20)");
+      halo.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = halo;
+      ctx.fillRect(0, 0, W, H);
+
+      if (!grid || !stats) {
+        ctx.fillStyle = "rgba(125,211,252,0.85)";
+        ctx.font = "12px system-ui, sans-serif";
+        ctx.fillText("Sin datos de fondo en esta zona", 16, 28);
+        return;
+      }
+
+      // --- Malla remuestreada con media de bloque (antialias del relieve) ---
+      const colsN = Math.max(2, Math.min(targetRes, grid.cols));
+      const rowsN = Math.max(2, Math.min(targetRes, grid.rows));
+      const stepC = grid.cols / colsN;
+      const stepR = grid.rows / rowsN;
+
+      const raw = new Float32Array(rowsN * colsN);
+      for (let r = 0; r < rowsN; r++) {
+        const r0 = Math.floor(r * stepR);
+        const r1 = Math.max(r0 + 1, Math.floor((r + 1) * stepR));
+        for (let c = 0; c < colsN; c++) {
+          const c0 = Math.floor(c * stepC);
+          const c1 = Math.max(c0 + 1, Math.floor((c + 1) * stepC));
+          let sum = 0;
+          let n = 0;
+          for (let rr = r0; rr < r1 && rr < grid.rows; rr++) {
+            for (let cc = c0; cc < c1 && cc < grid.cols; cc++) {
+              const v = grid.elev[rr * grid.cols + cc];
+              if (Number.isFinite(v) && v < 0) {
+                sum += v;
+                n++;
+              }
+            }
+          }
+          raw[r * colsN + c] = n ? sum / n : NaN;
+        }
+      }
+
+      // Suavizado auxiliar. Con microrelieve activo conservamos la muestra
+      // original para no borrar cantos pequeños antes del sombreado.
+      const smoothed = new Float32Array(rowsN * colsN);
+      const K = [1, 2, 1];
+      for (let r = 0; r < rowsN; r++) {
+        for (let c = 0; c < colsN; c++) {
+          const i = r * colsN + c;
+          if (!Number.isFinite(raw[i])) {
+            smoothed[i] = NaN;
+            continue;
+          }
+          let s = 0;
+          let w = 0;
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              const rr = r + dr;
+              const cc = c + dc;
+              if (rr < 0 || cc < 0 || rr >= rowsN || cc >= colsN) continue;
+              const v = raw[rr * colsN + cc];
+              if (!Number.isFinite(v)) continue;
+              const k = K[dr + 1] * K[dc + 1];
+              s += v * k;
+              w += k;
+            }
+          }
+          smoothed[i] = w ? s / w : raw[i];
+        }
+      }
+
+       // Base siempre suavizada: evita que el ruido puntual del DEM se
+       // convierta en pinchos verticales.
+       const zArr = Float32Array.from(smoothed);
+       const detail = new Float32Array(rowsN * colsN);
+
+      // Realce de microrelieve: máscara de enfoque (unsharp) suave que
+      // devuelve estructura (piedras, veriles) sin generar puntas.
+      if (microRelief) {
+        const broad = new Float32Array(rowsN * colsN);
+        const R = 3;
+        for (let r = 0; r < rowsN; r++) {
+          for (let c = 0; c < colsN; c++) {
+            const i = r * colsN + c;
+            if (!Number.isFinite(zArr[i])) {
+              broad[i] = NaN;
+              continue;
+            }
+            let s2 = 0;
+            let n2 = 0;
+            for (let dr = -R; dr <= R; dr++) {
+              for (let dc = -R; dc <= R; dc++) {
+                const rr = r + dr;
+                const cc = c + dc;
+                if (rr < 0 || cc < 0 || rr >= rowsN || cc >= colsN) continue;
+                const v = zArr[rr * colsN + cc];
+                if (!Number.isFinite(v)) continue;
+                s2 += v;
+                n2++;
+              }
+            }
+            broad[i] = n2 ? s2 / n2 : zArr[i];
+          }
+        }
+        // Estimación robusta del ruido (desviación absoluta mediana) para
+        // aplicar una puerta suave: solo se amplifica lo que supera el ruido.
+        const deltas: number[] = [];
+        for (let i = 0; i < zArr.length; i++) {
+          if (!Number.isFinite(zArr[i]) || !Number.isFinite(broad[i])) continue;
+          const d = zArr[i] - broad[i];
+          detail[i] = d;
+          deltas.push(Math.abs(d));
+        }
+        deltas.sort((a, b) => a - b);
+        const mad = deltas.length ? deltas[Math.floor(deltas.length * 0.5)] : 0;
+        const gate = mad * 0.9;
+        const robustSpan = Math.max(4, stats.robustMaxZ - stats.robustMinZ);
+        const maxEnhancement = Math.max(1, Math.min(6, robustSpan * 0.04));
+        for (let i = 0; i < zArr.length; i++) {
+          if (!Number.isFinite(zArr[i]) || !Number.isFinite(broad[i])) continue;
+          const measured = detail[i];
+          const mag = Math.abs(measured);
+          if (mag <= gate) continue;
+          const soft = Math.sign(measured) * (mag - gate);
+          const enhanced = Math.max(
+            -maxEnhancement,
+            Math.min(maxEnhancement, soft * detailStrength),
+          );
+          zArr[i] += enhanced;
+        }
+        // Un último promedio ligero cierra cualquier canto artificial.
+        const tmp = Float32Array.from(zArr);
+        for (let r = 0; r < rowsN; r++) {
+          for (let c = 0; c < colsN; c++) {
+            const i = r * colsN + c;
+            if (!Number.isFinite(tmp[i])) continue;
+            let s = 0;
+            let w = 0;
+            for (let dr = -1; dr <= 1; dr++) {
+              for (let dc = -1; dc <= 1; dc++) {
+                const rr = r + dr;
+                const cc = c + dc;
+                if (rr < 0 || cc < 0 || rr >= rowsN || cc >= colsN) continue;
+                const v = tmp[rr * colsN + cc];
+                if (!Number.isFinite(v)) continue;
+                const k = K[dr + 1] * K[dc + 1];
+                s += v * k;
+                w += k;
+              }
+            }
+            if (w) zArr[i] = s / w;
+          }
+        }
+      }
+
+       // El rango percentil evita que una sola sima aplaste visualmente todo
+       // el microrelieve de la zona de pesca. Si el usuario fija un recorte
+       // mínimo/máximo, ese rango manda y las lecturas erráticas se recortan.
+       const manualMaxZ = clipMin != null ? -clipMin : null; // menos profundo
+       const manualMinZ = clipMax != null ? -clipMax : null; // más profundo
+       let displayMinZ = manualMinZ ?? stats.robustMinZ;
+       let displayMaxZ = manualMaxZ ?? stats.robustMaxZ;
+       if (displayMaxZ - displayMinZ < 1) displayMaxZ = displayMinZ + 1;
+       const span = Math.max(4, displayMaxZ - displayMinZ);
+       // Con recorte manual el clamp es estricto: nada sobresale del rango.
+       const manual = manualMinZ != null || manualMaxZ != null;
+       const lo = manual ? displayMinZ : displayMinZ - span * 0.08;
+       const hi = manual ? displayMaxZ : displayMaxZ + span * 0.08;
+       const vScale = 0.105 * exaggeration;
+       const hOf = (i: number) =>
+         ((Math.max(lo, Math.min(hi, zArr[i])) - displayMinZ) / span) * vScale;
+
+      // Oclusión ambiental barata: comparar con la media de un vecindario amplio.
+      const RAD = 3;
+      const ao = new Float32Array(rowsN * colsN);
+      for (let r = 0; r < rowsN; r++) {
+        for (let c = 0; c < colsN; c++) {
+          const i = r * colsN + c;
+          if (!Number.isFinite(zArr[i])) continue;
+          let s = 0;
+          let n = 0;
+          for (let dr = -RAD; dr <= RAD; dr += 1) {
+            for (let dc = -RAD; dc <= RAD; dc += 1) {
+              const rr = r + dr;
+              const cc = c + dc;
+              if (rr < 0 || cc < 0 || rr >= rowsN || cc >= colsN) continue;
+              const v = zArr[rr * colsN + cc];
+              if (!Number.isFinite(v)) continue;
+              s += v;
+              n++;
+            }
+          }
+          if (!n) continue;
+          const rel = (zArr[i] - s / n) / span; // >0 = cresta, <0 = hoyo
+          ao[i] = Math.max(-1, Math.min(1, rel * 34));
+        }
+      }
+
+      const yawR = (yaw * Math.PI) / 180;
+      const tiltR = (tilt * Math.PI) / 180;
+      const dist = 3.1;
+      const focal = Math.min(W, H) * 1.35 * zoom;
+      const aspectRatio = colsN / rowsN;
+      const sx = aspectRatio >= 1 ? 1 : aspectRatio;
+      const sy = aspectRatio >= 1 ? 1 / aspectRatio : 1;
+
+      const project = (u: number, v: number, h: number) => {
+        const x = u * sx * Math.cos(yawR) - v * sy * Math.sin(yawR);
+        const y = u * sx * Math.sin(yawR) + v * sy * Math.cos(yawR);
+        const yc = y * Math.cos(tiltR) - h * Math.sin(tiltR);
+        const zc = y * Math.sin(tiltR) + h * Math.cos(tiltR) + dist;
+        const k = focal / Math.max(0.35, zc);
+         return { x: W / 2 + pan.x + x * k, y: H * 0.52 + pan.y + yc * k, z: zc };
+      };
+
+      // Luz principal + relleno cenital.
+      const azR = ((90 - sunAz) * Math.PI) / 180;
+      const altR = (40 * Math.PI) / 180;
+      const L = {
+        x: Math.cos(altR) * Math.cos(azR),
+        y: -Math.cos(altR) * Math.sin(azR),
+        z: Math.sin(altR),
+      };
+
+      const du = 1 / (colsN - 1);
+      const dv = 1 / (rowsN - 1);
+      const baseH = -0.07;
+
+      // Normales por vértice (sombreado suave, sin facetas).
+      const nX = new Float32Array(rowsN * colsN);
+      const nY = new Float32Array(rowsN * colsN);
+      const nZ = new Float32Array(rowsN * colsN);
+      const dxW = du * sx;
+      const dyW = dv * sy;
+      for (let r = 0; r < rowsN; r++) {
+        for (let c = 0; c < colsN; c++) {
+          const i = r * colsN + c;
+          if (!Number.isFinite(zArr[i])) continue;
+          const iL = c > 0 ? r * colsN + (c - 1) : i;
+          const iR = c < colsN - 1 ? r * colsN + (c + 1) : i;
+          const iU = r > 0 ? (r - 1) * colsN + c : i;
+          const iD = r < rowsN - 1 ? (r + 1) * colsN + c : i;
+          const hL = Number.isFinite(zArr[iL]) ? hOf(iL) : hOf(i);
+          const hR = Number.isFinite(zArr[iR]) ? hOf(iR) : hOf(i);
+          const hU = Number.isFinite(zArr[iU]) ? hOf(iU) : hOf(i);
+          const hD = Number.isFinite(zArr[iD]) ? hOf(iD) : hOf(i);
+          const ax = -(hR - hL) / (2 * dxW);
+          const ay = -(hD - hU) / (2 * dyW);
+          const len = Math.hypot(ax, ay, 1) || 1;
+          nX[i] = ax / len;
+          nY[i] = ay / len;
+          nZ[i] = 1 / len;
+        }
+      }
+
+      type Quad = {
+        z: number;
+        pts: { x: number; y: number }[];
+        fill: string;
+        lines?: { a: { x: number; y: number }; b: { x: number; y: number }; master: boolean }[];
+      };
+      const quads: Quad[] = [];
+
+      const levels: number[] = [];
+      const step = niceStep(stats.maxDepth - stats.minDepth);
+      if (contours) {
+        for (let d = Math.ceil(stats.minDepth / step) * step; d <= stats.maxDepth; d += step) {
+          levels.push(d);
+        }
+      }
+      const masterEvery = step * 5;
+
+      // Niebla de agua: lo lejano se funde con el fondo.
+      const fogCol: RGB = [8, 26, 44];
+
+      for (let r = 0; r < rowsN - 1; r++) {
+        for (let c = 0; c < colsN - 1; c++) {
+          const i00 = r * colsN + c;
+          const i01 = r * colsN + c + 1;
+          const i11 = (r + 1) * colsN + c + 1;
+          const i10 = (r + 1) * colsN + c;
+          if (
+            !Number.isFinite(zArr[i00]) ||
+            !Number.isFinite(zArr[i01]) ||
+            !Number.isFinite(zArr[i11]) ||
+            !Number.isFinite(zArr[i10])
+          ) {
+            continue;
+          }
+
+          const u0 = c * du - 0.5;
+          const u1 = (c + 1) * du - 0.5;
+          const v0 = r * dv - 0.5;
+          const v1 = (r + 1) * dv - 0.5;
+
+          const p00 = project(u0, v0, hOf(i00));
+          const p01 = project(u1, v0, hOf(i01));
+          const p11 = project(u1, v1, hOf(i11));
+          const p10 = project(u0, v1, hOf(i10));
+
+          // Normal promediada de los cuatro vértices → sombreado continuo.
+          let nx = (nX[i00] + nX[i01] + nX[i11] + nX[i10]) / 4;
+          let ny = (nY[i00] + nY[i01] + nY[i11] + nY[i10]) / 4;
+          let nz = (nZ[i00] + nZ[i01] + nZ[i11] + nZ[i10]) / 4;
+          const nl = Math.hypot(nx, ny, nz) || 1;
+          nx /= nl;
+          ny /= nl;
+          nz /= nl;
+
+           const lambert = Math.max(0, nx * L.x + ny * L.y + nz * L.z);
+           // Luz rasante opuesta: separa cantos pequeños aunque la pendiente
+           // principal esté orientada fuera del sol.
+           const rim = Math.max(0, nx * -L.y + ny * L.x + nz * 0.18);
+          const sky = 0.5 + 0.5 * nz; // relleno hemisférico
+          const occ = 1 + 0.28 * ((ao[i00] + ao[i01] + ao[i11] + ao[i10]) / 4);
+          const spec = Math.pow(lambert, 30) * 0.26;
+           const localDetail =
+             (detail[i00] + detail[i01] + detail[i11] + detail[i10]) / 4;
+           const detailTone = Math.max(-0.3, Math.min(0.3, (localDetail / Math.max(0.5, span * 0.012)) * 0.2));
+           const shade =
+             (0.2 + 0.17 * sky + 0.83 * lambert + 0.3 * rim + detailTone) *
+             Math.max(0.46, occ);
+
+          const dp = -(zArr[i00] + zArr[i01] + zArr[i11] + zArr[i10]) / 4;
+          const base = rampColor(dp);
+          let rr = base[0] * shade + 255 * spec;
+          let gg = base[1] * shade + 255 * spec;
+          let bb = base[2] * shade + 255 * spec;
+
+          const zc = (p00.z + p01.z + p11.z + p10.z) / 4;
+          const fog = Math.max(0, Math.min(0.55, (zc - dist * 0.72) * 0.34));
+          rr = rr + (fogCol[0] - rr) * fog;
+          gg = gg + (fogCol[1] - gg) * fog;
+          bb = bb + (fogCol[2] - bb) * fog;
+
+          const q: Quad = {
+            z: zc,
+            pts: [p00, p01, p11, p10],
+            fill: `rgb(${Math.max(0, Math.min(255, rr)) | 0},${Math.max(0, Math.min(255, gg)) | 0},${
+              Math.max(0, Math.min(255, bb)) | 0
+            })`,
+          };
+
+          if (levels.length) {
+            const d00 = -zArr[i00];
+            const d01 = -zArr[i01];
+            const d11 = -zArr[i11];
+            const d10 = -zArr[i10];
+            const dmin = Math.min(d00, d01, d11, d10);
+            const dmax = Math.max(d00, d01, d11, d10);
+            for (const lv of levels) {
+              if (lv < dmin || lv > dmax) continue;
+              const pts: { x: number; y: number }[] = [];
+              const edge = (
+                da: number,
+                db: number,
+                pa: { x: number; y: number },
+                pb: { x: number; y: number },
+              ) => {
+                if (da === db) return;
+                const t = (lv - da) / (db - da);
+                if (t < 0 || t > 1) return;
+                pts.push({ x: pa.x + (pb.x - pa.x) * t, y: pa.y + (pb.y - pa.y) * t });
+              };
+              edge(d00, d01, p00, p01);
+              edge(d01, d11, p01, p11);
+              edge(d11, d10, p11, p10);
+              edge(d10, d00, p10, p00);
+              if (pts.length >= 2) {
+                (q.lines ||= []).push({
+                  a: pts[0],
+                  b: pts[1],
+                  master: Math.abs(lv % masterEvery) < 1e-6,
+                });
+              }
+            }
+          }
+
+          quads.push(q);
+
+          // Zócalo: paredes del bloque con degradado propio (efecto maqueta).
+          const wall = (
+            pa: { x: number; y: number; z: number },
+            pb: { x: number; y: number; z: number },
+            ua: number,
+            va: number,
+            ub: number,
+            vb: number,
+            tone: number,
+          ) => {
+            const ba = project(ua, va, baseH);
+            const bb2 = project(ub, vb, baseH);
+            quads.push({
+              z: (pa.z + pb.z) / 2 + 0.0015,
+              pts: [pa, pb, bb2, ba],
+              fill: `rgb(${(12 * tone) | 0},${(30 * tone) | 0},${(50 * tone) | 0})`,
+            });
+          };
+          if (r === 0) wall(p00, p01, u0, v0, u1, v0, 1.15);
+          if (r === rowsN - 2) wall(p10, p11, u0, v1, u1, v1, 0.75);
+          if (c === 0) wall(p00, p10, u0, v0, u0, v1, 0.95);
+          if (c === colsN - 2) wall(p01, p11, u1, v0, u1, v1, 1.05);
+        }
+      }
+
+      if (!quads.length) {
+        ctx.fillStyle = "rgba(125,211,252,0.85)";
+        ctx.font = "12px system-ui, sans-serif";
+        ctx.fillText("Zona sin fondo marino", 16, 28);
+        return;
+      }
+
+      quads.sort((a, b) => b.z - a.z);
+      for (const q of quads) {
+        ctx.beginPath();
+        ctx.moveTo(q.pts[0].x, q.pts[0].y);
+        for (let i = 1; i < q.pts.length; i++) ctx.lineTo(q.pts[i].x, q.pts[i].y);
+        ctx.closePath();
+        ctx.fillStyle = q.fill;
+        ctx.fill();
+        ctx.strokeStyle = q.fill;
+        ctx.lineWidth = 0.35;
+        ctx.stroke();
+      }
+      // Isóbatas en una segunda pasada: trazo limpio sobre el relieve.
+      for (const q of quads) {
+        if (!q.lines) continue;
+        for (const ln of q.lines) {
+          ctx.beginPath();
+          ctx.moveTo(ln.a.x, ln.a.y);
+          ctx.lineTo(ln.b.x, ln.b.y);
+          ctx.strokeStyle = ln.master ? "rgba(6,18,32,0.62)" : "rgba(10,28,46,0.30)";
+          ctx.lineWidth = ln.master ? 1.05 : 0.6;
+          ctx.stroke();
+        }
+      }
+
+      // --------- Marcador GPS sobre el relieve ---------
+      gpsScreenRef.current = null;
+      if (gpsPosition) {
+        const uu = (gpsPosition.lng - grid.west) / Math.max(1e-9, grid.east - grid.west);
+        const vv = (grid.north - gpsPosition.lat) / Math.max(1e-9, grid.north - grid.south);
+        const inside = uu >= 0 && uu <= 1 && vv >= 0 && vv <= 1;
+        const cu = Math.max(0, Math.min(1, uu));
+        const cv = Math.max(0, Math.min(1, vv));
+        const gc = Math.max(0, Math.min(colsN - 1, Math.round(cu * (colsN - 1))));
+        const gr = Math.max(0, Math.min(rowsN - 1, Math.round(cv * (rowsN - 1))));
+        const gi = gr * colsN + gc;
+        const gh = Number.isFinite(zArr[gi]) ? hOf(gi) : 0;
+        const pFloor = project(cu - 0.5, cv - 0.5, gh);
+        const pTop = project(cu - 0.5, cv - 0.5, gh + 0.16);
+        gpsScreenRef.current = { x: pFloor.x, y: pFloor.y, inside };
+        const color = inside ? "#22d3ee" : "#f59e0b";
+        ctx.strokeStyle = inside ? "rgba(34,211,238,0.9)" : "rgba(245,158,11,0.9)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(pFloor.x, pFloor.y);
+        ctx.lineTo(pTop.x, pTop.y);
+        ctx.stroke();
+        // Anillos de referencia para localizarse de un vistazo.
+        for (const rad of [7, 15, 24]) {
+          ctx.beginPath();
+          ctx.ellipse(pFloor.x, pFloor.y, rad, rad * 0.42, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(34,211,238,${rad === 7 ? 0.8 : 0.28})`;
+          ctx.lineWidth = rad === 7 ? 1.6 : 1;
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.arc(pTop.x, pTop.y, 5.5, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = "rgba(2,10,19,0.9)";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        const gd = Number.isFinite(zArr[gi]) ? -zArr[gi] : null;
+        const label = inside
+          ? gd != null
+            ? `Barco · ${gd.toFixed(1)} m`
+            : "Barco"
+          : "Barco fuera de la zona";
+        ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = "rgba(2,12,22,0.65)";
+        ctx.fillRect(pTop.x + 7, pTop.y - 8, tw + 8, 14);
+        ctx.fillStyle = "rgba(226,244,255,0.95)";
+        ctx.fillText(label, pTop.x + 11, pTop.y + 2);
+      }
+
+      // ---------------- HUD ----------------
+      const pad = 16;
+      const mono = (s: number) => `${s}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+
+      // Escala de profundidad con marcas.
+      const legX = pad;
+      const legY = pad + 6;
+      const legW = 10;
+      const legH = Math.max(80, Math.min(180, H - 110));
+      const grad = ctx.createLinearGradient(0, legY, 0, legY + legH);
+      for (let i = 0; i <= 12; i++) {
+        const d = stats.minDepth + ((stats.maxDepth - stats.minDepth) * i) / 12;
+        const cc = rampColor(d);
+        grad.addColorStop(i / 12, `rgb(${cc[0] | 0},${cc[1] | 0},${cc[2] | 0})`);
+      }
+      ctx.fillStyle = grad;
+      ctx.fillRect(legX, legY, legW, legH);
+      ctx.strokeStyle = "rgba(226,244,255,0.30)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(legX + 0.5, legY + 0.5, legW, legH);
+      ctx.font = mono(9);
+      ctx.fillStyle = "rgba(226,244,255,0.80)";
+      for (let i = 0; i <= 4; i++) {
+        const y = legY + (legH * i) / 4;
+        const d = stats.minDepth + ((stats.maxDepth - stats.minDepth) * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(legX + legW, y);
+        ctx.lineTo(legX + legW + 4, y);
+        ctx.strokeStyle = "rgba(226,244,255,0.45)";
+        ctx.stroke();
+        ctx.fillText(`${Math.round(d)}`, legX + legW + 7, y + 3);
+      }
+      ctx.fillStyle = "rgba(226,244,255,0.55)";
+      ctx.fillText("PROF. (m)", legX, legY - 6);
+
+      // Escala horizontal en km, medida sobre la proyección.
+      const midLat = (grid.north + grid.south) / 2;
+      const widthMeters =
+        Math.abs(grid.east - grid.west) * 111320 * Math.cos((midLat * Math.PI) / 180);
+      const pA = project(-0.5, 0, 0);
+      const pB = project(0.5, 0, 0);
+      const pxPerMeter = Math.hypot(pB.x - pA.x, pB.y - pA.y) / Math.max(1, widthMeters);
+      if (Number.isFinite(pxPerMeter) && pxPerMeter > 0) {
+        const targetPx = Math.min(150, W * 0.22);
+        const rawKm = targetPx / pxPerMeter / 1000;
+        const p10 = Math.pow(10, Math.floor(Math.log10(Math.max(0.05, rawKm))));
+        const nk = rawKm / p10;
+        const km = (nk < 1.5 ? 1 : nk < 3.5 ? 2 : nk < 7.5 ? 5 : 10) * p10;
+        const barPx = km * 1000 * pxPerMeter;
+        const bx = pad;
+        const by = H - pad - 8;
+        ctx.strokeStyle = "rgba(226,244,255,0.85)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(bx + barPx, by);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+        for (const x of [bx, bx + barPx]) {
+          ctx.beginPath();
+          ctx.moveTo(x, by - 4);
+          ctx.lineTo(x, by + 4);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "rgba(226,244,255,0.85)";
+        ctx.font = mono(10);
+        ctx.fillText(km >= 1 ? `${km} km` : `${Math.round(km * 1000)} m`, bx, by - 8);
+      }
+
+      // Rosa de los vientos.
+      const cx = W - pad - 22;
+      const cy = pad + 22;
+      const nrm = project(0, -0.5, 0);
+      const ctr = project(0, 0, 0);
+      let ang = Math.atan2(nrm.y - ctr.y, nrm.x - ctr.x);
+      if (!Number.isFinite(ang)) ang = -Math.PI / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.strokeStyle = "rgba(226,244,255,0.25)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, 17, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.rotate(ang);
+      ctx.beginPath();
+      ctx.moveTo(13, 0);
+      ctx.lineTo(-6, 5.5);
+      ctx.lineTo(-2.5, 0);
+      ctx.lineTo(-6, -5.5);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(232,248,255,0.92)";
+      ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = "rgba(226,244,255,0.70)";
+      ctx.font = mono(9);
+      ctx.fillText("N", cx - 3, cy + 29);
+
+      // Datos de la vista.
+      ctx.fillStyle = "rgba(226,244,255,0.55)";
+      ctx.font = mono(9);
+      const info = [
+        `${Math.round(stats.minDepth)}–${Math.round(stats.maxDepth)} m`,
+        contours ? `isóbatas ${Math.round(step)} m` : "sin isóbatas",
+        `×${exaggeration.toFixed(1)} relieve`,
+        `${colsN}×${rowsN}`,
+      ].join("   ·   ");
+      ctx.fillText(info, pad, H - pad - 26);
+    },
+    [
+      grid,
+      stats,
+      yaw,
+      tilt,
+      exaggeration,
+      sunAz,
+      zoom,
+      contours,
+      microRelief,
+      detailStrength,
+      clipMin,
+      clipMax,
+      pan,
+      gpsPosition,
+    ],
+  );
+
+  // Render progresivo: pasada rápida inmediata y pasada de alta densidad al parar.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => draw(dragRef.current ? 110 : 190));
+    const t = window.setTimeout(() => draw(640), 260);
+    return () => {
+      cancelAnimationFrame(id);
+      window.clearTimeout(t);
+    };
+  }, [draw]);
+
+  // Redibuja al cambiar el tamaño de pantalla (rotación del móvil incluida).
+  // En iOS/Android el layout tarda en estabilizarse tras girar: repintamos
+  // varias veces y observamos el lienzo para no quedarnos en negro.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const repaint = (res = 190) => {
+      if (resizeFrameRef.current != null) cancelAnimationFrame(resizeFrameRef.current);
+      resizeFrameRef.current = requestAnimationFrame(() => {
+        resizeFrameRef.current = null;
+        draw(res);
+      });
+    };
+    const onResize = () => {
+      // Durante el giro solo una pasada ligera. La pasada final espera a que
+      // visualViewport y el layout hayan dejado de cambiar.
+      repaint(120);
+      if (resizeTimerRef.current != null) window.clearTimeout(resizeTimerRef.current);
+      resizeTimerRef.current = window.setTimeout(() => {
+        resizeTimerRef.current = null;
+        const mobile = Math.min(window.innerWidth, window.innerHeight) < 700;
+        draw(mobile ? 320 : 520);
+      }, 500);
+    };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    window.visualViewport?.addEventListener("resize", onResize);
+    const ro =
+      typeof ResizeObserver !== "undefined" && canvas
+        ? new ResizeObserver(() => repaint())
+        : null;
+    if (ro && canvas) ro.observe(canvas);
+    return () => {
+      if (resizeFrameRef.current != null) cancelAnimationFrame(resizeFrameRef.current);
+      if (resizeTimerRef.current != null) window.clearTimeout(resizeTimerRef.current);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+      ro?.disconnect();
+    };
+  }, [draw]);
+
+
+  // Pantalla completa limpia. No forzamos la orientación: bloquearla desde
+  // el WebView durante un giro puede recrear o dejar a 0 px el viewport.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  const [portrait, setPortrait] = useState(false);
+  useEffect(() => {
+    const check = () =>
+      setPortrait(window.innerHeight > window.innerWidth && window.innerWidth < 900);
+    check();
+    window.addEventListener("resize", check);
+    window.addEventListener("orientationchange", check);
+    return () => {
+      window.removeEventListener("resize", check);
+      window.removeEventListener("orientationchange", check);
+    };
+  }, []);
+
+  // Rueda / pinch de trackpad: listener nativo no pasivo con zoom exponencial
+  // proporcional al delta (evita saltos bruscos con gestos rápidos).
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
+       const intensity = e.ctrlKey ? 0.00045 : 0.00024;
+       setAnchoredZoom(zoomRef.current * Math.exp(-dy * intensity), e.clientX, e.clientY);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [setAnchoredZoom]);
+
+  const [showControls, setShowControls] = useState(false);
+
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-[4000] h-[100dvh] w-screen overflow-hidden bg-[#020a13]">
+      <canvas
+        ref={canvasRef}
+        className="h-full w-full cursor-grab touch-none select-none active:cursor-grabbing"
+        style={{ display: "block" }}
+        onPointerDown={(e) => {
+          pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+          if (pointersRef.current.size === 2) {
+            const [a, b] = [...pointersRef.current.values()];
+            pinchRef.current = {
+              distance: Math.hypot(a.x - b.x, a.y - b.y),
+              x: (a.x + b.x) / 2,
+              y: (a.y + b.y) / 2,
+            };
+            dragRef.current = null;
+          } else {
+            dragRef.current = { x: e.clientX, y: e.clientY };
+            movedRef.current = false;
+          }
+        }}
+        onPointerMove={(e) => {
+          if (pointersRef.current.has(e.pointerId)) {
+            pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          }
+          if (pointersRef.current.size === 2 && pinchRef.current != null) {
+            const [a, b] = [...pointersRef.current.values()];
+            const dist = Math.hypot(a.x - b.x, a.y - b.y);
+            const midX = (a.x + b.x) / 2;
+            const midY = (a.y + b.y) / 2;
+            if (pinchRef.current.distance > 0) {
+              // Zoom anclado al centro de los dedos y desplazamiento simultáneo.
+              const ratio = dist / pinchRef.current.distance;
+              const k = 1 + (ratio - 1) * 0.22;
+              const beforePan = panRef.current;
+              setAnchoredZoom(zoomRef.current * k, midX, midY);
+              const movedPan = {
+                x: panRef.current.x + (midX - pinchRef.current.x),
+                y: panRef.current.y + (midY - pinchRef.current.y),
+              };
+              // Ignora ruido subpíxel, pero conserva el arrastre real con dos dedos.
+              if (
+                Math.hypot(movedPan.x - beforePan.x, movedPan.y - beforePan.y) > 0.35
+              ) {
+                panRef.current = movedPan;
+                setPan(movedPan);
+              }
+            }
+            pinchRef.current = { distance: dist, x: midX, y: midY };
+            return;
+          }
+          const d = dragRef.current;
+          if (!d) return;
+          const dx = e.clientX - d.x;
+          const dy = e.clientY - d.y;
+          // Zona muerta amplia contra el temblor natural del dedo.
+          if (Math.hypot(dx, dy) < 4) return;
+          movedRef.current = true;
+          const damp = (v: number) => Math.sign(v) * Math.min(Math.abs(v), 22);
+          if (dragModeRef.current === "mover") {
+            // Navegar: el dedo desplaza la imagen, sin tocar la inclinación.
+            const next = { x: panRef.current.x + damp(dx), y: panRef.current.y + damp(dy) };
+            panRef.current = next;
+            setPan(next);
+          } else {
+            // Sensibilidad regulable + suavizado: la pantalla ya no se dispara.
+            const k = 0.010 * sensRef.current;
+            setYaw((r) => r + damp(dx) * k);
+            setTilt((t) => Math.max(15, Math.min(85, t - damp(dy) * k * 0.8)));
+          }
+          dragRef.current = { x: e.clientX, y: e.clientY };
+        }}
+        onPointerUp={(e) => {
+          pointersRef.current.delete(e.pointerId);
+          if (pointersRef.current.size < 2) pinchRef.current = null;
+          dragRef.current = null;
+        }}
+        onPointerCancel={(e) => {
+          pointersRef.current.delete(e.pointerId);
+          pinchRef.current = null;
+          dragRef.current = null;
+        }}
+        onDoubleClick={(e) => setAnchoredZoom(zoomRef.current * 1.35, e.clientX, e.clientY)}
+        onPointerLeave={() => setReadout(null)}
+      />
+
+      {/* Botón de salida bien visible, arriba a la izquierda */}
+      <button
+        onClick={onClose}
+        aria-label="Volver al mapa"
+        className="absolute left-3 z-[1000] flex items-center gap-1.5 rounded-full border border-white/25 bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground shadow-lg backdrop-blur active:scale-95"
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+      >
+        <span aria-hidden>←</span> Volver
+      </button>
+
+      {/* HUD mínimo: solo iconos flotantes, sin paneles que tapen el relieve */}
+      <div
+        className="absolute right-3 flex flex-col gap-2"
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+      >
+
+        <button
+          aria-label="Acercar"
+          onClick={() => {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect) setAnchoredZoom(zoomRef.current * 1.12, rect.left + rect.width / 2, rect.top + rect.height / 2);
+          }}
+          className="h-9 w-9 rounded-full border border-white/15 bg-black/45 text-sm text-white backdrop-blur hover:bg-black/65"
+        >
+          +
+        </button>
+        <button
+          aria-label="Alejar"
+          onClick={() => {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect) setAnchoredZoom(zoomRef.current / 1.12, rect.left + rect.width / 2, rect.top + rect.height / 2);
+          }}
+          className="h-9 w-9 rounded-full border border-white/15 bg-black/45 text-sm text-white backdrop-blur hover:bg-black/65"
+        >
+          −
+        </button>
+        <button
+          aria-label="Ajustes de la vista 3D"
+          onClick={() => setShowControls((v) => !v)}
+          className={`h-9 w-9 rounded-full border border-white/15 text-sm text-white backdrop-blur hover:bg-black/65 ${
+            showControls ? "bg-primary/70" : "bg-black/45"
+          }`}
+        >
+          ⚙
+        </button>
+        <button
+          aria-label="Restablecer vista"
+          onClick={() => {
+            setYaw(0);
+            setTilt(52);
+            setZoom(1);
+            zoomRef.current = 1;
+            setPan({ x: 0, y: 0 });
+            panRef.current = { x: 0, y: 0 };
+            setExaggeration(6);
+            setDetailStrength(3.2);
+            setClipMin(null);
+            setClipMax(null);
+            setSensitivity(1);
+          }}
+          className="h-9 w-9 rounded-full border border-white/15 bg-black/45 text-[10px] text-white backdrop-blur hover:bg-black/65"
+        >
+          ⟲
+        </button>
+        <button
+          aria-label="Vista plana (cenital)"
+          onClick={() => {
+            const flat = tilt > 78;
+            setTilt(flat ? 52 : 88);
+            if (!flat) setYaw(0);
+          }}
+          className={`h-9 w-9 rounded-full border border-white/15 text-[10px] font-semibold text-white backdrop-blur hover:bg-black/65 ${
+            tilt > 78 ? "bg-primary/70" : "bg-black/45"
+          }`}
+        >
+          {tilt > 78 ? "3D" : "2D"}
+        </button>
+        <button
+          aria-label={dragMode === "mover" ? "Modo mover" : "Modo girar"}
+          onClick={() => setDragMode((m) => (m === "mover" ? "girar" : "mover"))}
+          className="h-9 w-9 rounded-full border border-white/15 bg-black/45 text-sm text-white backdrop-blur hover:bg-black/65"
+        >
+          {dragMode === "mover" ? "✋" : "⟳"}
+        </button>
+        <button
+          aria-label="Centrar en mi barco"
+          onClick={() => {
+            const g = gpsScreenRef.current;
+            const { w, h } = viewSizeRef.current;
+            if (!g || !w || !h) return;
+            const next = {
+              x: panRef.current.x + (w / 2 - g.x),
+              y: panRef.current.y + (h * 0.52 - g.y),
+            };
+            panRef.current = next;
+            setPan(next);
+          }}
+          disabled={!gpsPosition}
+          className="h-9 w-9 rounded-full border border-white/15 bg-black/45 text-sm text-white backdrop-blur hover:bg-black/65 disabled:opacity-40"
+        >
+          ⛵
+        </button>
+        <button
+          aria-label="Seguir el barco"
+          onClick={() => onToggleFollowGps?.(!followGps)}
+          className={`h-9 w-9 rounded-full border border-white/15 text-sm text-white backdrop-blur hover:bg-black/65 ${
+            followGps ? "bg-primary/70" : "bg-black/45"
+          }`}
+        >
+          ⌖
+        </button>
+      </div>
+
+
+      {portrait && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[11px] text-white backdrop-blur"
+          style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+        >
+          Gira el móvil en horizontal para más visión
+        </div>
+      )}
+
+      {showControls && (
+        <div
+          className="absolute right-16 top-3 w-[240px] rounded-xl border border-white/12 bg-black/60 p-3 text-white backdrop-blur"
+          style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+        >
+          <label className="mb-2 flex items-center gap-2 text-[10px] text-white/70">
+            Relieve
+            <input
+              type="range"
+              min={1}
+              max={15}
+              step={0.5}
+              value={exaggeration}
+              onChange={(e) => setExaggeration(parseFloat(e.target.value))}
+              className="flex-1 accent-primary"
+            />
+          </label>
+          <label className="mb-2 flex items-center gap-2 text-[10px] text-white/70">
+            Luz
+            <input
+              type="range"
+              min={0}
+              max={360}
+              step={5}
+              value={sunAz}
+              onChange={(e) => setSunAz(parseFloat(e.target.value))}
+              className="flex-1 accent-primary"
+            />
+          </label>
+          <label className="mb-2 flex items-center gap-2 text-[10px] text-white/70">
+            Zoom
+            <input
+              type="range"
+              min={MIN_ZOOM}
+              max={MAX_ZOOM}
+              step={0.05}
+              value={zoom}
+              onChange={(e) => {
+                const rect = canvasRef.current?.getBoundingClientRect();
+                if (rect) setAnchoredZoom(parseFloat(e.target.value), rect.left + rect.width / 2, rect.top + rect.height / 2);
+              }}
+              className="flex-1 accent-primary"
+            />
+          </label>
+          <label className="mb-2 flex items-center gap-2 text-[10px] text-white/70">
+            Giro
+            <input
+              type="range"
+              min={-180}
+              max={180}
+              step={0.5}
+              value={yaw}
+              onChange={(e) => setYaw(parseFloat(e.target.value))}
+              className="flex-1 accent-primary"
+            />
+          </label>
+          <label className="mb-2 flex items-center gap-2 text-[10px] text-white/70">
+            Inclinación
+            <input
+              type="range"
+              min={15}
+              max={88}
+              step={0.5}
+              value={tilt}
+              onChange={(e) => setTilt(parseFloat(e.target.value))}
+              className="flex-1 accent-primary"
+            />
+          </label>
+          <label className="mb-2 flex items-center gap-2 text-[10px] text-white/70">
+            Sensib.
+            <input
+              type="range"
+              min={0.4}
+              max={4}
+              step={0.1}
+              value={sensitivity}
+              onChange={(e) => setSensitivity(parseFloat(e.target.value))}
+              className="flex-1 accent-primary"
+            />
+            <span className="w-7 text-right">×{sensitivity.toFixed(1)}</span>
+          </label>
+
+          <div className="mb-2 mt-2 border-t border-white/10 pt-2">
+            <div className="mb-1 flex items-center justify-between text-[10px] text-white/70">
+              <span>Recorte de profundidad</span>
+              <button
+                onClick={() => {
+                  setClipMin(null);
+                  setClipMax(null);
+                }}
+                className="rounded border border-white/15 px-1.5 py-0.5 text-[9px] text-white/80"
+              >
+                Auto
+              </button>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] text-white/70">
+              <label className="flex flex-1 items-center gap-1">
+                Mín
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder={stats ? String(Math.round(stats.minDepth)) : "0"}
+                  value={clipMin ?? ""}
+                  onChange={(e) =>
+                    setClipMin(e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value)))
+                  }
+                  className="w-full rounded border border-white/15 bg-black/40 px-1 py-0.5 text-[10px] text-white"
+                />
+              </label>
+              <label className="flex flex-1 items-center gap-1">
+                Máx
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  placeholder={stats ? String(Math.round(stats.maxDepth)) : "0"}
+                  value={clipMax ?? ""}
+                  onChange={(e) =>
+                    setClipMax(e.target.value === "" ? null : Math.max(1, parseFloat(e.target.value)))
+                  }
+                  className="w-full rounded border border-white/15 bg-black/40 px-1 py-0.5 text-[10px] text-white"
+                />
+              </label>
+              <span className="text-white/50">m</span>
+            </div>
+            <p className="mt-1 text-[9px] leading-tight text-white/45">
+              Fija el rango vertical: las lecturas fuera de esos metros se recortan y el relieve
+              no se deforma.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-[10px] text-white/70">
+            <input
+              type="checkbox"
+              checked={contours}
+              onChange={(e) => setContours(e.target.checked)}
+              className="accent-primary"
+            />
+            Isóbatas
+          </label>
+          <label className="mt-2 flex items-center gap-2 text-[10px] text-white/70">
+            <input
+              type="checkbox"
+              checked={microRelief}
+              onChange={(e) => setMicroRelief(e.target.checked)}
+              className="accent-primary"
+            />
+            Realce de microrelieve (piedras)
+          </label>
+          {microRelief && (
+            <label className="mt-2 flex items-center gap-2 text-[10px] text-white/70">
+              Definición
+              <input
+                type="range"
+                min={0.2}
+                max={3}
+                step={0.1}
+                value={detailStrength}
+                onChange={(e) => setDetailStrength(parseFloat(e.target.value))}
+                className="flex-1 accent-primary"
+              />
+            </label>
+          )}
+        </div>
+      )}
+
+      {readout && (
+        <div className="absolute bottom-3 right-3 rounded bg-black/55 px-2 py-0.5 text-[10px] text-white backdrop-blur">
+          {readout}
+        </div>
+      )}
+    </div>
+  );
+}
+

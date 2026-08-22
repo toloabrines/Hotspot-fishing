@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-20T09:20:00.000Z",
+  "sheets": [
+    {
+      "sheet": "ES400425",
+      "product": "MBAR24 — Aproches de Alcudia (ES400425), 16 m",
+      "provider": "Instituto Hidrográfico de la Marina (IHM), Armada Española",
+      "license": "CC-BY-NC 4.0",
+      "attribution": "MBAR24 2024 CC-BY-NC 4.0 ihm.es — Instituto Hidrográfico de la Marina",
+      "nativeResM": 16,
+      "south": 39.70654690174856,
+      "west": 3.0682856844386373,
+      "north": 40.033378817797136,
+      "east": 3.6660512639155773,
+      "cols": 3192,
+      "rows": 2258,
+      "dLat": 0.0001447439840782,
+      "dLng": 0.0001872699183825,
+      "tileSize": 256,
+      "tilesX": 13,
+      "tilesY": 9,
+      "checks": {
+        "srcWidth": 4159,
+        "srcHeight": 2951,
+        "srcEpsg": 3395,
+        "minElev": -1060.893,
+        "maxElev": 0.397
+      }
+    },
+    {
+      "sheet": "ES400421",
+      "product": "MBAR24 — Bahía de Palma (ES400421), 16 m",
+      "provider": "Instituto Hidrográfico de la Marina (IHM), Armada Española",
+      "license": "CC-BY-NC 4.0",
+      "attribution": "MBAR24 2024 CC-BY-NC 4.0 ihm.es — Instituto Hidrográfico de la Marina",
+      "nativeResM": 16,
+      "south": 39.29578826637817,
+      "west": 2.199003950301859,
+      "north": 39.633353870304134,
+      "east": 2.8166136744397123,
+      "cols": 4297,
+      "rows": 3030,
+      "dLat": 0.00011140779007457647,
+      "dLng": 0.00014373044545912345,
+      "tileSize": 256,
+      "tilesX": 17,
+      "tilesY": 12,
+      "checks": {
+        "srcWidth": 4297,
+        "srcHeight": 3030,
+        "srcEpsg": 3395,
+        "minElev": -446.71,
+        "maxElev": -0.21
+      }
+    }
+  ]
+}
