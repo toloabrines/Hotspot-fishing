@@ -3752,17 +3752,24 @@ function HotspotsRenderer({
             });
 
             if (isDrift) {
-              driftCells.push({
-                row: r,
-                col: c,
-                lat: cell.lat,
-                lng: cell.lng,
-                score: prog.score,
-                depthM: bF.depthM,
-                sstGrad: clamp01(sF.sstGradiente),
-                chl: clamp01(sF.chl),
-                fsle: clamp01(env.fsle),
-              });
+              // La geometría del frente de deriva la manda FSLE. Las demás
+              // variables solo puntúan qué tramo es el mejor; no crean otra línea.
+              const driftFsleSnap = fsleFieldToday.nearestPoint(cell.lat, cell.lng);
+              if (driftFsleSnap && driftFsleSnap.distanceNm <= 6) {
+                driftCells.push({
+                  row: r,
+                  col: c,
+                  lat: driftFsleSnap.lat,
+                  lng: driftFsleSnap.lng,
+                  score: prog.score,
+                  depthM: bF.depthM,
+                  sstGrad: clamp01(sF.sstGradiente),
+                  chl: clamp01(sF.chl),
+                  fsle: clamp01(
+                    fsleFieldToday.proximity(driftFsleSnap.lat, driftFsleSnap.lng),
+                  ),
+                });
+              }
             }
 
             if (debug) {
@@ -5035,6 +5042,12 @@ function HotspotsRenderer({
             currentDirDeg: marine.currentDirDeg,
             windKn: marine.windKn,
             windFromDeg: marine.windFromDeg,
+          },
+          // FRENTE 1 debe recorrer exactamente una cresta FSLE visible.
+          // Corriente + viento siguen mandando solo la dirección de deriva.
+          snapToFront: (point) => {
+            const snap = fsleFieldToday.nearestPoint(point.lat, point.lng);
+            return snap && snap.distanceNm <= 6 ? { lat: snap.lat, lng: snap.lng } : null;
           },
           max: 3,
         });
