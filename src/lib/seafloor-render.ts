@@ -140,7 +140,7 @@ export function renderDemImage(grid: DemGrid, s: SeafloorSettings): ImageData {
 
   // Campo suavizado: redondea piedras y montículos y elimina el escalonado
   // pixelado y las rayas horizontales del dato original.
-  const passes = boost > 1 ? 2 : 1;
+  const passes = Math.max(0, Math.min(2, Math.floor(s.smoothingPasses ?? (boost > 1 ? 2 : 1))));
   const zs = smoothField(grid.elev as unknown as number[], cols, rows, passes);
   const at = (r: number, c: number) => {
     if (r < 0 || c < 0 || r >= rows || c >= cols) return NaN;
@@ -366,4 +366,3 @@ export function contourSegments(grid: DemGrid, depth: number): ContourSegment[] 
   }
   return segs;
 }
-

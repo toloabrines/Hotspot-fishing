@@ -3,9 +3,8 @@ import { createPortal } from "react-dom";
 import L from "leaflet";
 import { useMap, useMapEvents } from "react-leaflet";
 
-import { DemGrid, fetchDemGrid, snapBBox, type DemBBox } from "../lib/dem";
+import { DemGrid, fetchMbar24Grid, snapBBox, type DemBBox } from "../lib/dem";
 import { deviceTier } from "../lib/dem-perf";
-import { upsampleDemGrid } from "../lib/dem-upsample";
 import { contourSegments, renderDemImage } from "../lib/seafloor-render";
 import { MBAR24_KNOWN_SHEETS, fetchMbar24Coverage, type Mbar24Coverage } from "../lib/mbar24";
 import type { SeafloorSettings } from "../lib/seafloor.types";
@@ -13,44 +12,42 @@ import type { SeafloorSettings } from "../lib/seafloor.types";
 /** Más allá de este zoom el dato de 16 m ya no aporta nada útil: se oculta. */
 const MAX_USEFUL_ZOOM = 17;
 
-/** Sobremuestreo bicúbico (sólo visual) según el zoom y la gama del móvil. */
-function upsampleFactor(zoom: number): number {
-  const tier = deviceTier();
-  if (tier === "low") return zoom >= 15 ? 2 : 1;
-  if (zoom >= 15) return tier === "mid" ? 2 : 3;
-  if (zoom >= 13) return 2;
-  return 1;
+function isIosDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    /iPad|iPhone|iPod/i.test(navigator.userAgent ?? "") ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
 }
 
-/** Malla ligera que se pinta primero para que la carta aparezca ya. */
-function previewGridSize(zoom: number): number {
-  if (zoom >= 14) return 384;
-  if (zoom >= 12) return 320;
-  return 256;
+function isMobileDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return isIosDevice() || /Android|Mobile/i.test(navigator.userAgent ?? "");
 }
 
-/**
- * Malla definitiva. La máxima resolución (que iguala los 16 m nativos) sólo
- * se pide a partir de z13; por debajo no aporta detalle visible.
- */
+/** Una sola malla, limitada al detalle útil del dato real de 16 m. */
 function fullGridSize(zoom: number): number {
   const tier = deviceTier();
-  const cap = tier === "low" ? 720 : tier === "mid" ? 900 : 1280;
+  const cap = isIosDevice()
+    ? 640
+    : isMobileDevice()
+      ? tier === "low"
+        ? 512
+        : 720
+      : 900;
   const base =
-    zoom >= 16
-      ? 1280
-      : zoom >= 15
-        ? 1100
-        : zoom >= 14
-          ? 900
-          : zoom >= 13
-            ? 720
-            : zoom >= 12
-              ? 512
-              : zoom >= 10
-                ? 384
-                : 256;
-  return Math.min(base, zoom >= 13 ? cap : 512);
+    zoom >= 15
+      ? 720
+      : zoom >= 14
+        ? 640
+        : zoom >= 13
+          ? 560
+          : zoom >= 12
+            ? 448
+            : zoom >= 10
+              ? 320
+              : 256;
+  return Math.min(base, cap);
 }
 
 
@@ -89,6 +86,8 @@ const renderSettings = (contrast: number, zoom = 12): SeafloorSettings => ({
   focusGps: false,
   focusRadiusM: 800,
   microRelief: false,
+  // MBAR24 ya es una rejilla real de 16 m: suavizarla borra piedras pequeñas.
+  smoothingPasses: 0,
 });
 
 export interface Mbar24Status2D {
@@ -124,11 +123,9 @@ function intersectSheet(
 
 /** Intervalo de isóbatas adaptado al zoom (m). */
 function contourStep(zoom: number): number {
-  if (zoom >= 14) return 2;
-  if (zoom >= 13) return 5;
+  if (zoom >= 14) return 5;
   if (zoom >= 12) return 10;
-  if (zoom >= 11) return 20;
-  return 50;
+  return 20;
 }
 
 /** Cada cuántos niveles se dibuja una curva maestra (siempre ~10 m o múltiplo). */
@@ -236,8 +233,10 @@ export function Mbar24BathymetryLayer({
       // redondeo de cada bloque dejaba franjas verticales/horizontales.
       const topY = map.latLngToContainerPoint([grid.north, grid.west]).y;
       const botY = map.latLngToContainerPoint([grid.south, grid.west]).y;
+      // Aclarado visual suave: mejora la lectura en iPhone sin tocar el dato.
+      ctx.filter = "brightness(1.12) saturate(1.04)";
       ctx.drawImage(src, 0, 0, grid.cols, grid.rows, leftX, topY, w, botY - topY);
-
+      ctx.filter = "none";
 
       ctx.globalAlpha = 1;
     }
@@ -245,17 +244,13 @@ export function Mbar24BathymetryLayer({
     // 2. Isóbatas del propio DEM IHM, densidad según zoom.
     if (p.showContours) {
       const zoom = map.getZoom();
-      // En móviles de gama media/baja se simplifican las isóbatas (paso
-      // mayor) sin perder piedras, bajos ni cambios fuertes de profundidad.
-      const tier = deviceTier();
-      const step = contourStep(zoom) * (tier === "low" ? 2 : 1);
+      const step = contourStep(zoom);
       const range = grid.depthRange();
       const minD = Math.max(step, Math.floor(range.min / step) * step);
-      const maxD = Math.min(1200, Math.ceil(range.max / step) * step);
+      const maxD = Math.min(120, Math.ceil(range.max / step) * step);
       const levels: number[] = [];
       for (let d = minD; d <= maxD; d += step) levels.push(d);
-      const maxLevels = tier === "low" ? 60 : tier === "mid" ? 110 : 160;
-      if (levels.length > maxLevels) levels.length = maxLevels;
+      if (levels.length > 24) levels.length = 24;
 
       const masterEvery = masterEveryFor(step);
 
@@ -316,14 +311,11 @@ export function Mbar24BathymetryLayer({
     () => {},
   );
   applyGrid.current = (grid, zoom, fully, sheet) => {
-    // Sobremuestreo bicúbico: sólo mejora la representación (sin píxeles ni
-    // contornos escalonados); las profundidades son las del GeoTIFF original.
-    const rgrid = upsampleDemGrid(grid, upsampleFactor(zoom));
-    gridRef.current = rgrid;
-    const img = renderDemImage(rgrid, renderSettings(propsRef.current.contrast, zoom));
+    gridRef.current = grid;
+    const img = renderDemImage(grid, renderSettings(propsRef.current.contrast, zoom));
     const c = document.createElement("canvas");
-    c.width = rgrid.cols;
-    c.height = rgrid.rows;
+    c.width = grid.cols;
+    c.height = grid.rows;
     c.getContext("2d")?.putImageData(img, 0, 0);
     srcRef.current = c;
     const midLat = ((grid.north + grid.south) / 2) * (Math.PI / 180);
@@ -344,10 +336,9 @@ export function Mbar24BathymetryLayer({
     const p = propsRef.current;
     // Cancela de inmediato lo pendiente de la zona anterior.
     abortRef.current?.abort();
-    const clear = () => {
+    const resetGrid = () => {
       gridRef.current = null;
       srcRef.current = null;
-      setLoading(false);
       setStatus({
         active: false,
         sheet: null,
@@ -356,6 +347,10 @@ export function Mbar24BathymetryLayer({
         atNativeLimit: false,
       });
       draw.current();
+    };
+    const clear = () => {
+      resetGrid();
+      setLoading(false);
     };
     if (!p.showRelief && !p.showContours) return clear();
 
@@ -371,45 +366,22 @@ export function Mbar24BathymetryLayer({
     );
     const ctrl = new AbortController();
     abortRef.current = ctrl;
+    // No presentar la malla de la zona anterior como si fuese la actual.
+    resetGrid();
     setLoading(true);
 
-    // Vista previa ligera primero (respuesta inmediata, sin pantalla en
-    // blanco); la máxima resolución sólo a partir de z13.
-    const preview = previewGridSize(zoom);
-    const full = fullGridSize(zoom);
-
-    const finish = () => {
-      if (!ctrl.signal.aborted) setLoading(false);
-    };
-
-    const loadFull = () =>
-      fetchDemGrid(bbox, full, ctrl.signal)
-        .then((grid) => {
-          if (ctrl.signal.aborted) return;
-          if (!grid || !grid.mbar24?.loaded) {
-            if (!gridRef.current) clear();
-            return;
-          }
-          applyGrid.current(grid, zoom, hit.fully, hit.sheet);
-        })
-        .catch(() => {
-          /* cancelado o error → se conserva la carta anterior */
-        })
-        .finally(finish);
-
-    if (preview < full) {
-      fetchDemGrid(bbox, preview, ctrl.signal)
-        .then((grid) => {
-          if (ctrl.signal.aborted || !grid || !grid.mbar24?.loaded) return;
-          applyGrid.current(grid, Math.min(zoom, 12), hit.fully, hit.sheet);
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (!ctrl.signal.aborted) loadFull();
-        });
-    } else {
-      loadFull();
-    }
+    fetchMbar24Grid(bbox, fullGridSize(zoom), ctrl.signal)
+      .then((grid) => {
+        if (ctrl.signal.aborted) return;
+        if (!grid || !grid.mbar24?.loaded) return clear();
+        applyGrid.current(grid, zoom, hit.fully, hit.sheet);
+      })
+      .catch(() => {
+        if (!ctrl.signal.aborted) clear();
+      })
+      .finally(() => {
+        if (!ctrl.signal.aborted) setLoading(false);
+      });
   };
 
 
@@ -437,8 +409,11 @@ export function Mbar24BathymetryLayer({
     fetchMbar24Coverage(ctrl.signal)
       .then((cov) => {
         if (!alive || cov.length === 0) return;
+        const hadCoverage = intersectSheet(map.getBounds(), coverageRef.current) != null;
         coverageRef.current = cov;
-        load.current();
+        // Evita duplicar la primera petición en Alcúdia/Palma. Sólo recarga si
+        // el índice remoto añadió una hoja que no estaba en la lista estática.
+        if (!hadCoverage && intersectSheet(map.getBounds(), cov)) load.current();
       })
       .catch(() => {});
     return () => {
@@ -485,4 +460,3 @@ export function Mbar24BathymetryLayer({
     map.getContainer(),
   );
 }
-
