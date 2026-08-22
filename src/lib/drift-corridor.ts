@@ -282,57 +282,12 @@ function traceFront(
   return { points: pts, lengthKm };
 }
 
-/**
- * Ajusta la línea calculada al frente FSLE visible.
- * Densificamos antes de proyectar para conservar la curvatura de la cresta
- * y evitar cuerdas rectas que se separen visualmente de la línea fina.
- */
-function snapTraceToFront(
-  trace: TraceResult,
-  snap: (point: LatLng) => LatLng | null,
-): TraceResult | null {
-  const dense: LatLng[] = [];
-  const maxStepKm = 0.2;
-
-  for (let i = 0; i < trace.points.length; i++) {
-    const a = trace.points[i];
-    if (i === 0) {
-      dense.push(a);
-      continue;
-    }
-    const b = trace.points[i - 1];
-    const steps = Math.max(1, Math.ceil(haversineKm(b, a) / maxStepKm));
-    for (let j = 1; j <= steps; j++) {
-      const t = j / steps;
-      dense.push({
-        lat: b.lat + (a.lat - b.lat) * t,
-        lng: b.lng + (a.lng - b.lng) * t,
-      });
-    }
-  }
-
-  const points: LatLng[] = [];
-  for (const point of dense) {
-    const projected = snap(point);
-    if (!projected) continue;
-    const previous = points[points.length - 1];
-    if (!previous || haversineKm(previous, projected) >= 0.02) points.push(projected);
-  }
-  if (points.length < 2) return null;
-
-  let lengthKm = 0;
-  for (let i = 1; i < points.length; i++) lengthKm += haversineKm(points[i - 1], points[i]);
-  return lengthKm >= 0.1 ? { points, lengthKm } : null;
-}
-
 export interface BuildCorridorsOptions {
   env: DriftCorridorEnv;
   /** Máximo de corredores devueltos (por defecto 3). */
   max?: number;
   /** Longitud mínima del corredor en km (por defecto 0.5). */
   minLengthKm?: number;
-  /** Proyecta el corredor sobre la geometría exacta del frente FSLE visible. */
-  snapToFront?: (point: LatLng) => LatLng | null;
 }
 
 export function buildDriftCorridors(
@@ -361,12 +316,7 @@ export function buildDriftCorridors(
     const sorted = group.slice().sort((a, b) => b.score - a.score);
     const topSlice = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.7)));
     const score = Math.round(topSlice.reduce((s, c) => s + c.score, 0) / topSlice.length);
-    const rawTrace = traceFront(group, drift?.dirDeg ?? null, minKm);
-    const trace = opts.snapToFront
-      ? snapTraceToFront(rawTrace, opts.snapToFront)
-      : rawTrace;
-    if (!trace) return null;
-    const { points, lengthKm } = trace;
+    const { points, lengthKm } = traceFront(group, drift?.dirDeg ?? null, minKm);
     const start = points[0];
     const end = points[points.length - 1];
     const center = points[Math.floor(points.length / 2)];
@@ -418,7 +368,7 @@ export function buildDriftCorridors(
       confidence,
       cellCount: group.length,
     } satisfies DriftCorridor;
-  }).filter((c): c is DriftCorridor => c !== null);
+  });
 
   built.sort(
     (a, b) =>

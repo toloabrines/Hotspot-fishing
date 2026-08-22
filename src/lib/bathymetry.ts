@@ -153,23 +153,12 @@ export async function getDepthAtLatLng(
 ): Promise<DepthSample> {
   try {
     const { fetchDemGrid, snapBBox } = await import("./dem");
-    // Agrupamos los puntos cercanos en una misma tesela DEM. Antes cada
-    // celda del Top 1 descargaba su propia malla 96×96 y una zona 9×9 podía
-    // disparar 81 peticiones. La caché/inflight de fetchDemGrid ahora
-    // comparte una sola petición por tesela (~5,5 km).
-    const tileDeg = 0.05;
-    const tileSouth = Math.floor(lat / tileDeg) * tileDeg;
-    const tileWest = Math.floor(lng / tileDeg) * tileDeg;
+    const half = 0.004; // ~450 m: suficiente para caer en la tesela correcta
     const bbox = snapBBox(
-      {
-        south: tileSouth,
-        north: tileSouth + tileDeg,
-        west: tileWest,
-        east: tileWest + tileDeg,
-      },
+      { south: lat - half, north: lat + half, west: lng - half, east: lng + half },
       0.002,
     );
-    const grid = await fetchDemGrid(bbox, 192, signal);
+    const grid = await fetchDemGrid(bbox, 96, signal);
     const d = grid?.depthAt(lat, lng) ?? null;
     if (d != null && Number.isFinite(d)) {
       return {

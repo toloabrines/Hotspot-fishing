@@ -2415,52 +2415,17 @@ function HotspotsRenderer({
       let sampledDepthSum = 0;
       const concurrency = 8;
       let cursor = 0;
-      // El cálculo debe continuar aunque un proveedor batimétrico se quede
-      // colgado. Superficie solo necesita la profundidad como filtro básico;
-      // fondo/calamar reciben algo más de margen para conservar el detalle.
-      const depthAbortController = new AbortController();
-      const forwardDepthAbort = () => depthAbortController.abort();
-      if (abortController.signal.aborted) depthAbortController.abort();
-      else abortController.signal.addEventListener("abort", forwardDepthAbort, { once: true });
-      let depthStageTimedOut = false;
-      let finishDepthTimeout: (() => void) | null = null;
-      const depthTimeoutPromise = new Promise<void>((resolve) => {
-        finishDepthTimeout = resolve;
-      });
-      const depthStageTimer = setTimeout(
-        () => {
-          depthStageTimedOut = true;
-          depthAbortController.abort();
-          finishDepthTimeout?.();
-        },
-        fishingMode === "surface" ? 12000 : 30000,
-      );
       const fetchWorker = async () => {
         while (cursor < depthSampleTargets.length) {
-          if (
-            depthAbortController.signal.aborted ||
-            abortController.signal.aborted ||
-            myRun !== runIdRef.current
-          ) {
-            return;
-          }
           const i = cursor++;
           const target = depthSampleTargets[i];
+          if (abortController.signal.aborted || myRun !== runIdRef.current) return;
           const sample = await getDepthAtLatLng(
             target.lat,
             target.lng,
-            depthAbortController.signal,
+            abortController.signal,
           ).catch(() => ({ depth: null, source: "none" as DepthSource, attempts: undefined }));
-          // Si el timeout venció mientras una caché o proveedor ignoraba el
-          // AbortSignal, no dejamos que esa respuesta tardía modifique el
-          // análisis que ya ha continuado con los datos disponibles.
-          if (
-            depthAbortController.signal.aborted ||
-            abortController.signal.aborted ||
-            myRun !== runIdRef.current
-          ) {
-            return;
-          }
+          if (abortController.signal.aborted || myRun !== runIdRef.current) return;
           const cell = nearestDepthSampleFor(target.lat, target.lng);
           if (cell) {
             cell.depth = sample.depth;
@@ -2475,27 +2440,10 @@ function HotspotsRenderer({
             if (sample.source === "emodnet") sampledEmodnet++;
             else if (sample.source === "gebco") sampledGebco++;
           }
+          if (myRun !== runIdRef.current) return;
         }
       };
-      const depthWorkers = Promise.all(
-        Array.from({ length: concurrency }, () => fetchWorker()),
-      ).catch((err) => {
-        if (!depthStageTimedOut) throw err;
-        console.warn("FishingHotspots: depth workers stopped after timeout", err);
-      });
-      try {
-        // Abortar no basta en iPhone: Cache Storage puede ignorar temporalmente
-        // el AbortSignal. La carrera libera siempre el pipeline al vencer el
-        // límite, aunque una promesa interna siga sin responder.
-        await Promise.race([depthWorkers, depthTimeoutPromise]);
-      } finally {
-        clearTimeout(depthStageTimer);
-        finishDepthTimeout = null;
-        abortController.signal.removeEventListener("abort", forwardDepthAbort);
-      }
-      if (depthStageTimedOut) {
-        console.warn("FishingHotspots: depth stage timed out; continuing with available data");
-      }
+      await Promise.all(Array.from({ length: concurrency }, () => fetchWorker()));
       if (myRun !== runIdRef.current) return;
 
       // 5a) Logs de diagnóstico — ¿realmente recibimos profundidad numérica?
@@ -3804,24 +3752,17 @@ function HotspotsRenderer({
             });
 
             if (isDrift) {
-              // La geometría del frente de deriva la manda FSLE. Las demás
-              // variables solo puntúan qué tramo es el mejor; no crean otra línea.
-              const driftFsleSnap = fsleFieldToday.nearestPoint(cell.lat, cell.lng);
-              if (driftFsleSnap && driftFsleSnap.distanceNm <= 6) {
-                driftCells.push({
-                  row: r,
-                  col: c,
-                  lat: driftFsleSnap.lat,
-                  lng: driftFsleSnap.lng,
-                  score: prog.score,
-                  depthM: bF.depthM,
-                  sstGrad: clamp01(sF.sstGradiente),
-                  chl: clamp01(sF.chl),
-                  fsle: clamp01(
-                    fsleFieldToday.proximity(driftFsleSnap.lat, driftFsleSnap.lng),
-                  ),
-                });
-              }
+              driftCells.push({
+                row: r,
+                col: c,
+                lat: cell.lat,
+                lng: cell.lng,
+                score: prog.score,
+                depthM: bF.depthM,
+                sstGrad: clamp01(sF.sstGradiente),
+                chl: clamp01(sF.chl),
+                fsle: clamp01(env.fsle),
+              });
             }
 
             if (debug) {
@@ -3854,14 +3795,7 @@ function HotspotsRenderer({
           //    básico (tierra / agua imposible), que ya está aplicado
           //    arriba (isLand + isCoastTooClose + MIN_OCEAN_DEPTH).
           //  · Top 1 superficie ≠ Top 1 fondo (rama totalmente independiente).
-          // Top 1 de superficie debe quedar sobre la MISMA cresta FSLE que
-          // se dibuja en el mapa. Proyectamos cada candidato a la línea real;
-          // si no hay FSLE en el área, no inventamos un punto.
-          const fsleSnap = fsleFieldToday.nearestPoint(cell.lat, cell.lng);
-          if (!fsleSnap || fsleSnap.distanceNm > 6) continue;
-          const surfaceLat = fsleSnap.lat;
-          const surfaceLng = fsleSnap.lng;
-          const envS = envAt(surfaceLat, surfaceLng);
+          const envS = envAt(cell.lat, cell.lng);
           const grad = computeSurfaceGradientScore(sF, envS.fsle, envS.persistencia);
 
           // Filtro batimétrico BÁSICO (no decide ranking, solo descarta
@@ -3961,7 +3895,6 @@ function HotspotsRenderer({
             chl: "clorofila",
           };
           const reasons: string[] = [
-            "Top 1 ajustado sobre una cresta FSLE visible",
             "Top 1 elegido por coincidencia de gradientes de SST, CHL y altimetría",
           ];
           if (grad.score < 35 && sF.fallbackSignal > 0) {
@@ -3982,8 +3915,8 @@ function HotspotsRenderer({
           scored.push({
             r,
             c,
-            lat: surfaceLat,
-            lng: surfaceLng,
+            lat: cell.lat,
+            lng: cell.lng,
             bottom: bF,
             surface: sF,
             breakdown,
@@ -4099,7 +4032,7 @@ function HotspotsRenderer({
 
       // En SUPERFICIE no hay mínimo duro: si hay mar válido debe salir Top 1,
       // aunque los gradientes sean débiles y se marque como baja confianza.
-      const HARD_MIN_SURFACE = 25;
+      const HARD_MIN_SURFACE = 0;
       // En SUPERFICIE: pool amplio y sin corte por profundidad/score.
       // Si hay mar válido, debe salir Top 1; la batimetría solo informa el popup.
       const preLimit = fishingMode === "surface" ? 60 : limit;
@@ -4141,10 +4074,7 @@ function HotspotsRenderer({
           for (const s of rest) {
             let tooClose = false;
             for (const p of picked) {
-              if (
-                (p.r === s.r && p.c === s.c) ||
-                distanceMeters(p.lat, p.lng, s.lat, s.lng) < 500
-              ) {
+              if (p.r === s.r && p.c === s.c) {
                 tooClose = true;
                 break;
               }
@@ -4864,13 +4794,7 @@ function HotspotsRenderer({
 
         // ─── SUPERFICIE: recálculo con motor de gradientes ───
         if (fishingMode === "surface") {
-          const fsleNow = fsleFieldToday.proximity(s.lat, s.lng);
-          const fslePrev = fsleFieldPrev.proximity(s.lat, s.lng);
-          const fslePersistence =
-            fsleNow <= 0 && fslePrev <= 0
-              ? 0
-              : Math.min(fsleNow, fslePrev) * 0.7 + fsleNow * 0.3;
-          const grad2 = computeSurfaceGradientScore(s.surface, fsleNow, fslePersistence);
+          const grad2 = computeSurfaceGradientScore(s.surface);
           let pen2 = 0;
           if (s.bottom.hasBathy && s.bottom.depthM != null) {
             if (s.bottom.depthM < 30) pen2 += 25;
@@ -4916,7 +4840,6 @@ function HotspotsRenderer({
             chl: "clorofila",
           };
           const reasons2: string[] = [
-            "Top 1 confirmado sobre una cresta FSLE visible",
             "Top 1 elegido por coincidencia de gradientes de SST, CHL y altimetría",
           ];
           if (grad2.score < 35 && s.surface.fallbackSignal > 0) {
@@ -4993,20 +4916,11 @@ function HotspotsRenderer({
           s.breakdown = breakdown2;
         }
 
-        // e) Top 1 de superficie solo es válido con datos oceanográficos
-        // suficientes y a ≤500 m de la cresta FSLE. Las capas se activan
-        // automáticamente; si sus datos no llegan, se muestra "sin zona clara".
-        if (fishingMode === "surface") {
-          const fsleDistanceNm = fsleFieldToday.distanceNm(s.lat, s.lng);
-          const fsleDistanceM = fsleDistanceNm == null ? null : fsleDistanceNm * 1852;
-          if (
-            newSurfaceLayersCount < 2 ||
-            fsleDistanceM == null ||
-            fsleDistanceM > 500 ||
-            s.breakdown.scoreTotal < HARD_MIN_SURFACE
-          ) {
-            continue;
-          }
+        // e) Aplicar de nuevo el corte mínimo. En superficie SIN excepciones:
+        //    si el score post-validación cae por debajo de HARD_MIN_SURFACE,
+        //    descartamos también al primer candidato (no fallback engañoso).
+        if (fishingMode === "surface" && s.breakdown.scoreTotal < HARD_MIN_SURFACE) {
+          continue;
         }
         validatedPicked.push(s);
       }
@@ -5072,6 +4986,31 @@ function HotspotsRenderer({
         }
         if (rescue) validatedPicked.push(rescue);
       }
+      if (validatedPicked.length === 0 && fishingMode === "surface") {
+        const rescuePool = (surfaceCandidates.length > 0 ? surfaceCandidates : scored).filter((s) =>
+          isValidLatLng(s.lat, s.lng),
+        );
+        const rescue = rescuePool[0];
+        if (rescue) {
+          rescue.breakdown.scoreTotal = safeScore100(rescue.breakdown.scoreTotal);
+          rescue.breakdown.scoreSuperficie = safeScore100(rescue.breakdown.scoreSuperficie);
+          rescue.breakdown.reasons =
+            rescue.breakdown.reasons.length > 0
+              ? rescue.breakdown.reasons
+              : ["Top 1 elegido por fallback con SST, CHL o altimetría disponible"];
+          if (!rescue.breakdown.surfaceGradientDominant && rescue.surface.fallbackDominant) {
+            rescue.breakdown.surfaceGradientDominant = rescue.surface.fallbackDominant;
+          }
+          validatedPicked.push(rescue);
+          console.log("[FishingHotspots/Top1] fallback rescue aplicado", {
+            lat: rescue.lat,
+            lng: rescue.lng,
+            score: rescue.breakdown.scoreTotal,
+            fallbackSignal: rescue.surface.fallbackSignal,
+            layers: rescue.breakdown.layersUsed,
+          });
+        }
+      }
       const finalMinScore = isSquid || isDrift ? 0 : 25;
       const finalPicked = validatedPicked.filter((s) =>
         fishingMode === "surface"
@@ -5094,12 +5033,6 @@ function HotspotsRenderer({
             currentDirDeg: marine.currentDirDeg,
             windKn: marine.windKn,
             windFromDeg: marine.windFromDeg,
-          },
-          // FRENTE 1 debe recorrer exactamente una cresta FSLE visible.
-          // Corriente + viento siguen mandando solo la dirección de deriva.
-          snapToFront: (point) => {
-            const snap = fsleFieldToday.nearestPoint(point.lat, point.lng);
-            return snap && snap.distanceNm <= 6 ? { lat: snap.lat, lng: snap.lng } : null;
           },
           max: 3,
         });
