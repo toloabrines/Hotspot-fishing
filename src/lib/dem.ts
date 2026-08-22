@@ -345,6 +345,8 @@ export const LANDFORM_LABEL: Record<LandformKind, string> = {
 
 const memCache = new Map<string, DemGrid>();
 const inflight = new Map<string, Promise<DemGrid | null>>();
+// Nunca permitir que una tesela deje el Top 1 esperando indefinidamente.
+const DEM_REQUEST_TIMEOUT_MS = 6500;
 
 function keyFor(b: DemBBox, size: number) {
   return [b.south.toFixed(3), b.west.toFixed(3), b.north.toFixed(3), b.east.toFixed(3), size].join(
@@ -392,12 +394,21 @@ export async function fetchDemGrid(
       if (!json) {
         json = await withDemSlot(async () => {
           if (signal?.aborted) return null;
-          const res = await fetch(url, { signal });
-          if (!res.ok) return null;
-          const body = (await res.json()) as DemResponse;
-          if (!body?.elev?.length) return null;
-          void writeDemCache(url, body);
-          return body;
+          const ctrl = new AbortController();
+          const relayAbort = () => ctrl.abort();
+          signal?.addEventListener("abort", relayAbort, { once: true });
+          const timer = setTimeout(() => ctrl.abort(), DEM_REQUEST_TIMEOUT_MS);
+          try {
+            const res = await fetch(url, { signal: ctrl.signal });
+            if (!res.ok) return null;
+            const body = (await res.json()) as DemResponse;
+            if (!body?.elev?.length) return null;
+            void writeDemCache(url, body);
+            return body;
+          } finally {
+            clearTimeout(timer);
+            signal?.removeEventListener("abort", relayAbort);
+          }
         });
       }
 
