@@ -5,7 +5,7 @@
  *  - Tiles WMS/oceanográficos: CacheFirst con expiración por tamaño (acelera y reduce datos/batería).
  *  - Nunca cachea APIs /api/ ni POST.
  */
-const VERSION = "v1.1.0";
+const VERSION = "v1.1.1";
 const HTML_CACHE = `html-${VERSION}`;
 const ASSET_CACHE = `assets-${VERSION}`;
 const TILE_CACHE = `tiles-${VERSION}`;
