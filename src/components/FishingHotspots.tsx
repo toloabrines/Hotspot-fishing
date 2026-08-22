@@ -2415,6 +2415,21 @@ function HotspotsRenderer({
       let sampledDepthSum = 0;
       const concurrency = 8;
       let cursor = 0;
+      // El cálculo debe continuar aunque un proveedor batimétrico se quede
+      // colgado. Superficie solo necesita la profundidad como filtro básico;
+      // fondo/calamar reciben algo más de margen para conservar el detalle.
+      const depthAbortController = new AbortController();
+      const forwardDepthAbort = () => depthAbortController.abort();
+      if (abortController.signal.aborted) depthAbortController.abort();
+      else abortController.signal.addEventListener("abort", forwardDepthAbort, { once: true });
+      let depthStageTimedOut = false;
+      const depthStageTimer = setTimeout(
+        () => {
+          depthStageTimedOut = true;
+          depthAbortController.abort();
+        },
+        fishingMode === "surface" ? 12000 : 30000,
+      );
       const fetchWorker = async () => {
         while (cursor < depthSampleTargets.length) {
           const i = cursor++;
@@ -2423,7 +2438,7 @@ function HotspotsRenderer({
           const sample = await getDepthAtLatLng(
             target.lat,
             target.lng,
-            abortController.signal,
+            depthAbortController.signal,
           ).catch(() => ({ depth: null, source: "none" as DepthSource, attempts: undefined }));
           if (abortController.signal.aborted || myRun !== runIdRef.current) return;
           const cell = nearestDepthSampleFor(target.lat, target.lng);
@@ -2443,7 +2458,15 @@ function HotspotsRenderer({
           if (myRun !== runIdRef.current) return;
         }
       };
-      await Promise.all(Array.from({ length: concurrency }, () => fetchWorker()));
+      try {
+        await Promise.all(Array.from({ length: concurrency }, () => fetchWorker()));
+      } finally {
+        clearTimeout(depthStageTimer);
+        abortController.signal.removeEventListener("abort", forwardDepthAbort);
+      }
+      if (depthStageTimedOut) {
+        console.warn("FishingHotspots: depth stage timed out; continuing with available data");
+      }
       if (myRun !== runIdRef.current) return;
 
       // 5a) Logs de diagnóstico — ¿realmente recibimos profundidad numérica?
