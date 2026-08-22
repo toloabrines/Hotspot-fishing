@@ -211,6 +211,9 @@ async function loadMbar24Index(origin: string): Promise<Mbar24Index | null> {
 // Evita que una vista amplia dispare cientos de descargas y bloquee el móvil.
 // A esa escala el detalle de 16 m no es perceptible y EMODnet es suficiente.
 const MBAR24_MAX_TILES = 64;
+/** Caché caliente del Worker: evita volver a bajar la misma tesela de 128 KB. */
+const mbarTileCache = new Map<string, Promise<Int16Array | null>>();
+const MBAR24_TILE_CACHE_LIMIT = 128;
 
 type Mbar24Result =
   | { grid: Grid; sheet: Mbar24SheetIndex; cells: number; reason: null }
@@ -243,16 +246,32 @@ async function fetchMbar24(
   const colOf = (lng: number) => Math.floor((lng - sheet.west) / sheet.dLng);
   const rowOf = (lat: number) => Math.floor((sheet.north - lat) / sheet.dLat);
 
+  // El rango de teselas depende solo del bbox. Antes se recorrían cientos de
+  // miles de celdas únicamente para descubrir estos pocos identificadores.
+  const clipW = Math.max(w, sheet.west);
+  const clipE = Math.min(e, sheet.east);
+  const clipN = Math.min(n, sheet.north);
+  const clipS = Math.max(s, sheet.south);
+  const firstCol = Math.max(0, Math.min(sheet.cols - 1, colOf(clipW)));
+  const lastCol = Math.max(
+    0,
+    Math.min(sheet.cols - 1, colOf(clipE - Math.abs(sheet.dLng) * 1e-6)),
+  );
+  const firstRow = Math.max(
+    0,
+    Math.min(sheet.rows - 1, rowOf(clipN - Math.abs(sheet.dLat) * 1e-6)),
+  );
+  const lastRow = Math.max(
+    0,
+    Math.min(sheet.rows - 1, rowOf(clipS + Math.abs(sheet.dLat) * 1e-6)),
+  );
+
   const need = new Set<string>();
-  for (let r = 0; r < rows; r++) {
-    const lat = n - ((n - s) * (r + 0.5)) / rows;
-    const sr = rowOf(lat);
-    if (sr < 0 || sr >= sheet.rows) continue;
-    for (let c = 0; c < cols; c++) {
-      const lng = w + ((e - w) * (c + 0.5)) / cols;
-      const sc = colOf(lng);
-      if (sc < 0 || sc >= sheet.cols) continue;
-      need.add(`${Math.floor(sc / ts)}/${Math.floor(sr / ts)}`);
+  if (clipE > clipW && clipN > clipS && lastCol >= firstCol && lastRow >= firstRow) {
+    for (let ty = Math.floor(firstRow / ts); ty <= Math.floor(lastRow / ts); ty++) {
+      for (let tx = Math.floor(firstCol / ts); tx <= Math.floor(lastCol / ts); tx++) {
+        need.add(`${tx}/${ty}`);
+      }
     }
   }
   if (need.size === 0) {
@@ -273,23 +292,45 @@ async function fetchMbar24(
   const cloudTile = sheet.storage
     ? (await import("@/lib/mbar24-storage.server")).downloadCloudTile
     : null;
-  const tiles = new Map<string, Int16Array>();
-  await Promise.all(
-    Array.from(need).map(async (key) => {
+  const loadTile = (key: string): Promise<Int16Array | null> => {
+    const cacheKey = `${sheet.storage ? "cloud" : base}|${sheet.sheet}|${key}`;
+    const cached = mbarTileCache.get(cacheKey);
+    if (cached) return cached;
+
+    const pending = (async () => {
       let buf: ArrayBuffer | null = null;
       if (cloudTile) {
         buf = await cloudTile(sheet.sheet, key);
       } else {
         const res = await fetchWithTimeout(`${base}/${sheet.sheet}/${key}.bin`, 8000);
-        if (!res || !res.ok) return;
+        if (!res || !res.ok) return null;
         try {
           buf = await res.arrayBuffer();
         } catch {
           buf = null;
         }
       }
-      if (!buf || buf.byteLength < ts * ts * 2) return;
-      tiles.set(key, new Int16Array(buf, 0, ts * ts));
+      if (!buf || buf.byteLength < ts * ts * 2) return null;
+      return new Int16Array(buf, 0, ts * ts);
+    })();
+
+    mbarTileCache.set(cacheKey, pending);
+    void pending.then((tile) => {
+      if (!tile) mbarTileCache.delete(cacheKey);
+      while (mbarTileCache.size > MBAR24_TILE_CACHE_LIMIT) {
+        const oldest = mbarTileCache.keys().next().value;
+        if (oldest) mbarTileCache.delete(oldest);
+        else break;
+      }
+    });
+    return pending;
+  };
+
+  const tiles = new Map<string, Int16Array>();
+  await Promise.all(
+    Array.from(need).map(async (key) => {
+      const tile = await loadTile(key);
+      if (tile) tiles.set(key, tile);
     }),
   );
 
@@ -571,7 +612,7 @@ export const Route = createFileRoute("/api/dem")({
               headers: {
                 ...corsHeaders,
                 "Content-Type": "application/json",
-                "Cache-Control": "public, max-age=86400",
+                "Cache-Control": "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400",
               },
             },
           );

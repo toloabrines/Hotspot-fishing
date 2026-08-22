@@ -13,7 +13,7 @@
  * añadimos logs visibles de diagnóstico.
  */
 
-export type DepthSource = "emodnet" | "ncei" | "gebco" | "none";
+export type DepthSource = "mbar24" | "emodnet" | "ncei" | "gebco" | "none";
 export type DepthAttemptState = "ok" | "fail" | "skipped";
 
 export interface DepthAttempts {
@@ -152,12 +152,28 @@ export async function getDepthAtLatLng(
   signal?: AbortSignal,
 ): Promise<DepthSample> {
   try {
-    const { fetchDemGrid, snapBBox } = await import("./dem");
+    const [{ fetchDemGrid, fetchMbar24Grid, snapBBox }, { expectedMbar24Sheet }] =
+      await Promise.all([import("./dem"), import("./mbar24")]);
     const half = 0.004; // ~450 m: suficiente para caer en la tesela correcta
     const bbox = snapBBox(
       { south: lat - half, north: lat + half, west: lng - half, east: lng + half },
-      0.002,
+      0.004,
     );
+
+    // Alcúdia y Palma: dato IHM de 16 m directo. No espera EMODnet, NOAA ni
+    // GEBCO y la misma tesela queda reutilizable para los siguientes puntos.
+    if (expectedMbar24Sheet(lat, lng, lat, lng)) {
+      const mbar = await fetchMbar24Grid(bbox, 72, signal);
+      const depth = mbar?.depthAt(lat, lng) ?? null;
+      if (depth != null && Number.isFinite(depth)) {
+        return {
+          depth,
+          source: "mbar24",
+          attempts: { emodnet: "skipped", ncei: "skipped", gebco: "skipped" },
+        };
+      }
+    }
+
     const grid = await fetchDemGrid(bbox, 96, signal);
     const d = grid?.depthAt(lat, lng) ?? null;
     if (d != null && Number.isFinite(d)) {
@@ -167,7 +183,6 @@ export async function getDepthAtLatLng(
         attempts: { emodnet: "ok", gebco: "skipped" },
       };
     }
-
   } catch {
     /* sin DEM: seguimos con la cascada puntual */
   }

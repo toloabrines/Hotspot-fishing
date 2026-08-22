@@ -112,8 +112,10 @@ export function SeafloorPointCard({ lat, lng, info, time, onClose }: Props) {
           label={
             exactDepth == null
               ? "Profundidad (aprox.)"
-              : exactDepth.source === "emodnet"
-                ? "Profundidad (EMODnet)"
+              : exactDepth.source === "mbar24"
+                ? "Profundidad (IHM 16 m)"
+                : exactDepth.source === "emodnet"
+                  ? "Profundidad (EMODnet)"
                 : exactDepth.source === "ncei"
                   ? "Profundidad (NOAA NCEI)"
                   : exactDepth.source === "gebco"

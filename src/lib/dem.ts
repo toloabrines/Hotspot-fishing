@@ -112,7 +112,7 @@ export class DemGrid {
     coverage?: number;
     mbar24?: Mbar24Status | null;
     elev: (number | null)[];
-  }) {
+  }, computeDerivatives = true) {
     this.cols = raw.cols;
     this.rows = raw.rows;
     this.south = raw.south;
@@ -135,11 +135,18 @@ export class DemGrid {
     this.cellY = ((this.north - this.south) / this.rows) * EARTH_LAT_M;
     this.cellX = ((this.east - this.west) / this.cols) * EARTH_LNG_M * Math.cos(midLat);
 
-    this.slope = new Float32Array(this.elev.length).fill(NaN);
-    this.aspect = new Float32Array(this.elev.length).fill(NaN);
-    this.rough = new Float32Array(this.elev.length).fill(NaN);
-    this.curv = new Float32Array(this.elev.length).fill(NaN);
-    this.computeDerivatives();
+    const derivativeLength = computeDerivatives ? this.elev.length : 0;
+    this.slope = new Float32Array(derivativeLength);
+    this.aspect = new Float32Array(derivativeLength);
+    this.rough = new Float32Array(derivativeLength);
+    this.curv = new Float32Array(derivativeLength);
+    if (computeDerivatives) {
+      this.slope.fill(NaN);
+      this.aspect.fill(NaN);
+      this.rough.fill(NaN);
+      this.curv.fill(NaN);
+      this.computeDerivatives();
+    }
   }
 
   at(r: number, c: number): number {
@@ -475,7 +482,9 @@ export async function fetchMbar24Grid(
       }
 
       if (!json?.mbar24?.loaded || !json.elev?.length) return null;
-      const grid = new DemGrid(json);
+      // La capa 2D calcula el hillshade directamente desde elevación; no
+      // necesita cuatro matrices morfométricas adicionales.
+      const grid = new DemGrid(json, false);
       memCache.set(key, grid);
       if (memCache.size > 24) {
         const first = memCache.keys().next().value;

@@ -25,29 +25,49 @@ function isMobileDevice(): boolean {
   return isIosDevice() || /Android|Mobile/i.test(navigator.userAgent ?? "");
 }
 
-/** Una sola malla, limitada al detalle útil del dato real de 16 m. */
+/**
+ * Tamaño útil para 16 m sin sobremuestrear. En iPhone 640–720 celdas
+ * multiplicaban JSON, memoria y cálculo sin añadir detalle real.
+ */
 function fullGridSize(zoom: number): number {
   const tier = deviceTier();
   const cap = isIosDevice()
-    ? 640
+    ? 448
     : isMobileDevice()
       ? tier === "low"
-        ? 512
-        : 720
-      : 900;
-  const base =
-    zoom >= 15
-      ? 720
-      : zoom >= 14
-        ? 640
-        : zoom >= 13
-          ? 560
-          : zoom >= 12
-            ? 448
-            : zoom >= 10
-              ? 320
-              : 256;
+        ? 384
+        : 512
+      : 720;
+  const base = zoom >= 13 ? 448 : zoom >= 12 ? 384 : zoom >= 10 ? 288 : 224;
   return Math.min(base, cap);
+}
+
+/** Bloques geográficos estables: pequeños desplazamientos reutilizan la misma descarga. */
+function stableSnapStep(zoom: number): number {
+  if (zoom >= 15) return 0.008;
+  if (zoom >= 14) return 0.012;
+  if (zoom >= 13) return 0.016;
+  if (zoom >= 11) return 0.03;
+  return 0.06;
+}
+
+function gridCovers(grid: DemGrid, box: DemBBox): boolean {
+  const eps = 0.0002;
+  return (
+    grid.south <= box.south + eps &&
+    grid.west <= box.west + eps &&
+    grid.north >= box.north - eps &&
+    grid.east >= box.east - eps
+  );
+}
+
+function gridIntersects(grid: DemGrid, box: DemBBox): boolean {
+  return !(
+    grid.north <= box.south ||
+    grid.south >= box.north ||
+    grid.east <= box.west ||
+    grid.west >= box.east
+  );
 }
 
 
@@ -360,24 +380,37 @@ export function Mbar24BathymetryLayer({
     // escala útil del dato de 16 m: se oculta la capa en vez de ampliarla.
     if (!hit || zoom < 9 || zoom > MAX_USEFUL_ZOOM) return clear();
 
-    const bbox = snapBBox(
-      hit.box,
-      zoom >= 15 ? 0.001 : zoom >= 14 ? 0.002 : zoom >= 13 ? 0.004 : zoom >= 11 ? 0.008 : 0.02,
-    );
+    const current = gridRef.current;
+    // La zona visible ya está dentro del bloque cargado: repintado instantáneo,
+    // sin red ni nuevo cálculo.
+    if (current?.mbar24?.loaded && gridCovers(current, hit.box)) {
+      setLoading(false);
+      setStatus((prev) => ({ ...prev, fullyInside: hit.fully }));
+      draw.current();
+      return;
+    }
+
+    const bbox = snapBBox(hit.box, stableSnapStep(zoom));
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    // No presentar la malla de la zona anterior como si fuese la actual.
-    resetGrid();
+
+    // Conserva la parte geográficamente válida durante la siguiente descarga.
+    // Si la vista ya no solapa la malla anterior, sí se limpia para no ocultar
+    // el respaldo EMODnet/GEBCO.
+    if (!current || !gridIntersects(current, hit.box)) resetGrid();
     setLoading(true);
 
     fetchMbar24Grid(bbox, fullGridSize(zoom), ctrl.signal)
       .then((grid) => {
         if (ctrl.signal.aborted) return;
-        if (!grid || !grid.mbar24?.loaded) return clear();
+        if (!grid || !grid.mbar24?.loaded) {
+          if (!gridRef.current) clear();
+          return;
+        }
         applyGrid.current(grid, zoom, hit.fully, hit.sheet);
       })
       .catch(() => {
-        if (!ctrl.signal.aborted) clear();
+        if (!ctrl.signal.aborted && !gridRef.current) clear();
       })
       .finally(() => {
         if (!ctrl.signal.aborted) setLoading(false);
