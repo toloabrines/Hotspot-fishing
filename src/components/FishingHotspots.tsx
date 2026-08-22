@@ -2423,24 +2423,44 @@ function HotspotsRenderer({
       if (abortController.signal.aborted) depthAbortController.abort();
       else abortController.signal.addEventListener("abort", forwardDepthAbort, { once: true });
       let depthStageTimedOut = false;
+      let finishDepthTimeout: (() => void) | null = null;
+      const depthTimeoutPromise = new Promise<void>((resolve) => {
+        finishDepthTimeout = resolve;
+      });
       const depthStageTimer = setTimeout(
         () => {
           depthStageTimedOut = true;
           depthAbortController.abort();
+          finishDepthTimeout?.();
         },
         fishingMode === "surface" ? 12000 : 30000,
       );
       const fetchWorker = async () => {
         while (cursor < depthSampleTargets.length) {
+          if (
+            depthAbortController.signal.aborted ||
+            abortController.signal.aborted ||
+            myRun !== runIdRef.current
+          ) {
+            return;
+          }
           const i = cursor++;
           const target = depthSampleTargets[i];
-          if (abortController.signal.aborted || myRun !== runIdRef.current) return;
           const sample = await getDepthAtLatLng(
             target.lat,
             target.lng,
             depthAbortController.signal,
           ).catch(() => ({ depth: null, source: "none" as DepthSource, attempts: undefined }));
-          if (abortController.signal.aborted || myRun !== runIdRef.current) return;
+          // Si el timeout venció mientras una caché o proveedor ignoraba el
+          // AbortSignal, no dejamos que esa respuesta tardía modifique el
+          // análisis que ya ha continuado con los datos disponibles.
+          if (
+            depthAbortController.signal.aborted ||
+            abortController.signal.aborted ||
+            myRun !== runIdRef.current
+          ) {
+            return;
+          }
           const cell = nearestDepthSampleFor(target.lat, target.lng);
           if (cell) {
             cell.depth = sample.depth;
@@ -2455,13 +2475,22 @@ function HotspotsRenderer({
             if (sample.source === "emodnet") sampledEmodnet++;
             else if (sample.source === "gebco") sampledGebco++;
           }
-          if (myRun !== runIdRef.current) return;
         }
       };
+      const depthWorkers = Promise.all(
+        Array.from({ length: concurrency }, () => fetchWorker()),
+      ).catch((err) => {
+        if (!depthStageTimedOut) throw err;
+        console.warn("FishingHotspots: depth workers stopped after timeout", err);
+      });
       try {
-        await Promise.all(Array.from({ length: concurrency }, () => fetchWorker()));
+        // Abortar no basta en iPhone: Cache Storage puede ignorar temporalmente
+        // el AbortSignal. La carrera libera siempre el pipeline al vencer el
+        // límite, aunque una promesa interna siga sin responder.
+        await Promise.race([depthWorkers, depthTimeoutPromise]);
       } finally {
         clearTimeout(depthStageTimer);
+        finishDepthTimeout = null;
         abortController.signal.removeEventListener("abort", forwardDepthAbort);
       }
       if (depthStageTimedOut) {
