@@ -449,13 +449,13 @@ function Index() {
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
   const requestSpotsAnalysis = useCallback(() => {
     setSpotsLoading(true);
-    setAnalysisPhase("Buscando mejor zona…");
+    setAnalysisPhase("Activando capas y cargando datos…");
     setAnalysisMessage(null);
     if (spotsRecomputeTimerRef.current) window.clearTimeout(spotsRecomputeTimerRef.current);
     spotsRecomputeTimerRef.current = window.setTimeout(() => {
       setSpotsRecomputeTrigger((n) => n + 1);
       spotsRecomputeTimerRef.current = null;
-    }, 250);
+    }, 1200);
   }, []);
   const handleSpotsProgress = useCallback((phase: string | null) => {
     setAnalysisPhase(phase);
