@@ -1,4 +1,5 @@
-# Refreshed 2026-08-23 to force Codemagic to use the current main configuration
+# Hotspot Fishing — Codemagic iOS/TestFlight workflow
+# Trigger refresh: 2026-08-23 16:50 Europe/Madrid
 workflows:
   ios-testflight:
     name: iOS TestFlight
