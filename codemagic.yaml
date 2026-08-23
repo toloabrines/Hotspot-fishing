@@ -8,9 +8,6 @@ workflows:
       app_store_connect: codemagic_asc_api_key
 
     environment:
-      groups:
-        - certificate-private-key
-        - APP_STORE_CONNECT_KEY_ID
       vars:
         APP_STORE_APPLE_ID: "6771454287"
         BUNDLE_ID: "app.lovable.hotspotfishing"
@@ -85,4 +82,3 @@ workflows:
         auth: integration
         submit_to_testflight: true
         submit_to_app_store: false
-
