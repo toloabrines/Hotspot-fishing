@@ -1,5 +1,7 @@
 name: iOS — TestFlight
 
+permissions: write-all
+
 on:
   pull_request:
     branches: [main]
