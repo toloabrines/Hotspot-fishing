@@ -1,5 +1,5 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight workflow
-# Force reload: 2026-08-23 16:54 Europe/Madrid
+# Force reload: 2026-08-23 17:00 Europe/Madrid
 workflows:
   ios-testflight:
     name: iOS TestFlight
