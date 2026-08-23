@@ -1,2 +1,0 @@
-Temporary diagnostic trigger for iOS GitHub Actions preflight.
-Created to verify which required iOS signing secrets are present without exposing their values.
