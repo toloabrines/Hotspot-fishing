@@ -1,8 +1,8 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight workflow
-# Force reload: 2026-08-23 17:00 Europe/Madrid
+# Fresh workflow id to force Codemagic to discard stale configuration
 workflows:
-  ios-testflight:
-    name: iOS TestFlight
+  ios-testflight-v2:
+    name: iOS TestFlight v2
     max_build_duration: 90
     instance_type: mac_mini_m2
 
