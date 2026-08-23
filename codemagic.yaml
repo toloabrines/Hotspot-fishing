@@ -35,23 +35,24 @@ workflows:
       - name: Install npm dependencies
         script: |
           set -e
-          npm ci
+          npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Build web app
+      - name: Prepare Capacitor web directory
         script: |
           set -e
-          npm run build
+          mkdir -p dist
+          printf '%s\n' '<html><body>Loading...</body></html>' > dist/index.html
 
       - name: Sync Capacitor iOS
         script: |
           set -e
-          npx cap sync ios
+          npx --no-install cap sync ios
 
       - name: Install CocoaPods
         script: |
           set -e
           cd ios/App
-          pod install
+          pod install --repo-update
           cd ../..
 
       - name: Set up code signing
