@@ -1,0 +1,105 @@
+name: One-shot Top1 navigation fix
+
+on:
+  push:
+    branches:
+      - fix-top1-nearest-front
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch only Top 1 navigation
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/routes/index.tsx")
+          text = path.read_text()
+          old = '''            onNavigateTop1={() => {
+              if (!top1) return;
+              startNavigation({ lat: top1.lat, lng: top1.lng, name: `Top 1 (${Math.round(top1.score * 100)}%)` });
+              setWaypointsPanelOpen(false);
+              setMenuOpen(false);
+            }}'''
+          new = '''            onNavigateTop1={() => {
+              if (!top1) return;
+
+              let target = { lat: top1.lat, lng: top1.lng };
+              if (gps.position) {
+                const toRad = (deg: number) => (deg * Math.PI) / 180;
+                const distanceM = (
+                  a: { lat: number; lng: number },
+                  b: { lat: number; lng: number },
+                ) => {
+                  const earthRadiusM = 6371000;
+                  const dLat = toRad(b.lat - a.lat);
+                  const dLng = toRad(b.lng - a.lng);
+                  const h =
+                    Math.sin(dLat / 2) ** 2 +
+                    Math.cos(toRad(a.lat)) *
+                      Math.cos(toRad(b.lat)) *
+                      Math.sin(dLng / 2) ** 2;
+                  return 2 * earthRadiusM * Math.asin(Math.sqrt(h));
+                };
+
+                let associatedRoute: LatLng[] | null = null;
+                let nearestRouteDistance = Infinity;
+                for (const route of Object.values(displayedCorridors)) {
+                  if (!route || route.length < 2) continue;
+                  let distanceToTop1 = Infinity;
+                  for (const point of route) {
+                    distanceToTop1 = Math.min(distanceToTop1, distanceM(top1, point));
+                  }
+                  if (distanceToTop1 < nearestRouteDistance) {
+                    nearestRouteDistance = distanceToTop1;
+                    associatedRoute = route;
+                  }
+                }
+
+                if (associatedRoute) {
+                  let nearestPoint = associatedRoute[0];
+                  let nearestGpsDistance = distanceM(gps.position, nearestPoint);
+                  for (const point of associatedRoute.slice(1)) {
+                    const distance = distanceM(gps.position, point);
+                    if (distance < nearestGpsDistance) {
+                      nearestGpsDistance = distance;
+                      nearestPoint = point;
+                    }
+                  }
+                  target = { lat: nearestPoint.lat, lng: nearestPoint.lng };
+                }
+              }
+
+              startNavigation({
+                lat: target.lat,
+                lng: target.lng,
+                name: `Top 1 (${Math.round(top1.score * 100)}%)`,
+              });
+              setWaypointsPanelOpen(false);
+              setMenuOpen(false);
+            }}'''
+
+          if old not in text:
+              raise SystemExit("Expected Top 1 navigation block not found; nothing changed")
+
+          patched = text.replace(old, new, 1)
+          path.write_text(patched)
+
+      - name: Commit only index.tsx
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/index.tsx
+          git diff --cached --exit-code && exit 0
+          git commit -m "Fix Top 1 navigation to nearest front point"
+          git push origin HEAD:main
