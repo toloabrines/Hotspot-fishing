@@ -1,3 +1,4 @@
+# Refreshed 2026-08-23 to force Codemagic to use the current main configuration
 workflows:
   ios-testflight:
     name: iOS TestFlight
