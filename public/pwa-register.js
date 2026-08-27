@@ -1,12 +1,9 @@
-/* Registro del Service Worker con guardas:
- * - NO se registra en iframes (preview del editor Lovable).
- * - NO se registra en hosts de preview de Lovable (lovableproject.com, id-preview--).
- * - Solo se activa en producción servida desde el dominio publicado / instalada.
- *
- * Actualización silenciosa: cuando hay una versión nueva del Service Worker,
- * se activa sola (skipWaiting en sw.js) y aquí recargamos la página una sola
- * vez en cuanto toma el control. Así el usuario nunca ve el botón
- * "Actualizar" de Chrome/Safari: la app pasa a la versión nueva sin preguntar.
+/* Registro robusto del Service Worker para producción.
+ * - No se registra en previews/iframes de Lovable.
+ * - Fuerza la comprobación del SW sin usar caché HTTP.
+ * - Recarga una sola vez por cambio real de controller (guardia en memoria,
+ *   no sessionStorage, porque iOS puede conservar la sesión de una PWA instalada).
+ * - Vuelve a comprobar actualizaciones al abrir/volver a primer plano.
  */
 (function () {
   try {
@@ -37,24 +34,42 @@
       return;
     }
 
-    if ("serviceWorker" in navigator) {
-      // Marca de sesión: evita recargas en bucle si el SW cambia varias veces.
-      var reloaded = sessionStorage.getItem("sw-reloaded") === "1";
+    if (!("serviceWorker" in navigator)) return;
 
-      // Recarga automática y silenciosa cuando un SW nuevo toma el control.
-      navigator.serviceWorker.addEventListener("controllerchange", function () {
-        if (!reloaded) {
-          sessionStorage.setItem("sw-reloaded", "1");
-          window.location.reload();
-        }
-      });
+    var refreshing = false;
+    var registration = null;
 
-      window.addEventListener("load", function () {
-        navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(function () {});
-      });
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
+    function checkForUpdate() {
+      if (!registration) return;
+      registration.update().catch(function () {});
     }
+
+    window.addEventListener("load", function () {
+      navigator.serviceWorker
+        .register("/sw.js", {
+          scope: "/",
+          updateViaCache: "none",
+        })
+        .then(function (reg) {
+          registration = reg;
+          checkForUpdate();
+        })
+        .catch(function () {});
+    });
+
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") checkForUpdate();
+    });
+
+    window.addEventListener("focus", checkForUpdate);
+    window.setInterval(checkForUpdate, 30 * 60 * 1000);
   } catch (e) {
     /* no-op */
   }
 })();
-
