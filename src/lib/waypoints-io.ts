@@ -221,8 +221,8 @@ export async function pickAndParseWaypointsFile(): Promise<ImportedWaypoint[] | 
     }
     const input = document.createElement("input");
     input.type = "file";
-    // Sin filtro estricto: iOS/Android ocultan .gpx si el accept es demasiado específico
-    input.accept = ".gpx,.kml,.xml,.txt";
+    // No usar accept: iOS puede ocultar un .gpx válido si lo clasifica como text/xml.
+    // El contenido se valida después con el parser GPX/KML, así que abrir el selector no rompe otros formatos.
     input.style.position = "fixed";
     input.style.left = "-9999px";
     input.style.opacity = "0";
