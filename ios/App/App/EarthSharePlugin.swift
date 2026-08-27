@@ -218,13 +218,9 @@ public class EarthSharePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentInteractio
                 return
             }
 
-            let types: [UTType] = [
-                UTType(filenameExtension: "gpx") ?? .xml,
-                UTType(filenameExtension: "kml") ?? .xml,
-                .xml,
-                .plainText
-            ]
-            let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
+            // Mostrar cualquier archivo en Archivos; el parser de Hotspot valida después
+            // si el contenido es GPX/KML. Evita que iOS oculte KML por su UTI/MIME.
+            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: true)
             picker.delegate = self
             picker.allowsMultipleSelection = false
             self.pendingImportCall = call
