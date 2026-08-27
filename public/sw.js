@@ -1,16 +1,14 @@
 /* Hotspot Fishing — Service Worker
  * Estrategia:
- *  - HTML/navegación: NetworkFirst (con fallback a caché) → siempre intenta versión fresca.
+ *  - HTML/navegación: NetworkFirst sin caché HTTP → siempre intenta versión fresca.
  *  - Assets propios (JS/CSS/imagenes mismos-origen): StaleWhileRevalidate.
- *  - Tiles WMS/oceanográficos: CacheFirst con expiración por tamaño (acelera y reduce datos/batería).
+ *  - Tiles WMS/oceanográficos: CacheFirst con expiración por tamaño.
  *  - Nunca cachea APIs /api/ ni POST.
  */
-const VERSION = "v1.1.1";
+const VERSION = "v1.1.2";
 const HTML_CACHE = `html-${VERSION}`;
 const ASSET_CACHE = `assets-${VERSION}`;
 const TILE_CACHE = `tiles-${VERSION}`;
-// Reducido de 400 → 150 para bajar presión de memoria en móviles
-// (iOS WebView mata la app cuando la caché crece demasiado).
 const TILE_MAX_ENTRIES = 150;
 
 self.addEventListener("install", (event) => {
@@ -42,9 +40,7 @@ async function trimCache(cacheName, maxEntries) {
 function isTileRequest(url) {
   const h = url.hostname;
   return (
-    /tile|wms|wmts|geoserver|mapserv|copernicus|emodnet|gebco|openstreetmap|cartocdn|arcgis/i.test(
-      h,
-    ) ||
+    /tile|wms|wmts|geoserver|mapserv|copernicus|emodnet|gebco|openstreetmap|cartocdn|arcgis/i.test(h) ||
     /\/tile[s]?\//i.test(url.pathname) ||
     /\.(png|jpg|jpeg|webp)$/i.test(url.pathname)
   );
@@ -56,15 +52,13 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
 
-  // Nunca interferir con APIs propias (datos dinámicos)
   if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) return;
 
-  // Navegación HTML → NetworkFirst
   if (req.mode === "navigate" || req.destination === "document") {
     event.respondWith(
       (async () => {
         try {
-          const fresh = await fetch(req);
+          const fresh = await fetch(req, { cache: "no-store" });
           const cache = await caches.open(HTML_CACHE);
           cache.put(req, fresh.clone());
           return fresh;
@@ -77,7 +71,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Tiles oceanográficos / imágenes → CacheFirst con límite
   if (isTileRequest(url)) {
     event.respondWith(
       (async () => {
@@ -99,7 +92,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Assets mismo-origen → StaleWhileRevalidate
   if (url.origin === self.location.origin) {
     event.respondWith(
       (async () => {
@@ -116,4 +108,3 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
-
