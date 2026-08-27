@@ -72,7 +72,7 @@ export const Route = createRootRoute({
       { rel: "icon", type: "image/png", sizes: "192x192", href: "/icon-192.png" },
       { rel: "icon", type: "image/png", sizes: "512x512", href: "/icon-512.png" },
     ],
-    scripts: [{ src: "/pwa-register.js?v=1.1.2", defer: true }],
+    scripts: [{ src: "/pwa-register.js?v=1.1.3", defer: true }],
   }),
 
   shellComponent: RootShell,
@@ -114,7 +114,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
               />
               <feColorMatrix
                 type="matrix"
-                values="0 0 0 0 0.55  0 0 0 0 0.15  0 0 0 0 0.75  0 0 0 3 0"
+                values="0 0 0 0 0.55  0 0 0 0 0.15  0 0 0 0 0.75  0 0 0 0 3 0"
               />
             </filter>
           </defs>
