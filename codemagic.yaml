@@ -39,7 +39,8 @@ workflows:
           set -e
           rm -rf node_modules
           rm -f package-lock.json
-          npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+          npm cache verify
+          npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund --package-lock=false
 
       - name: Build web app
         script: |
