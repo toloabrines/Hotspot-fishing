@@ -38,9 +38,7 @@ workflows:
         script: |
           set -e
           rm -rf node_modules
-          rm -f package-lock.json
-          npm cache verify
-          npm install --ignore-scripts --omit=optional --no-audit --no-fund --package-lock=false
+          npm ci --include=optional --no-audit --no-fund
 
       - name: Prepare Capacitor web directory
         script: |
