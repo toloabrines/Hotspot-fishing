@@ -1,8 +1,8 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight workflow
 # Fresh workflow id to force Codemagic to discard stale configuration
 workflows:
-  ios-testflight-v2:
-    name: iOS TestFlight v2
+  ios-testflight-v3:
+    name: iOS TestFlight v3
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -22,7 +22,6 @@ workflows:
 
     cache:
       cache_paths:
-        - ~/.npm
         - $HOME/Library/Caches/CocoaPods
 
     triggering:
@@ -34,34 +33,35 @@ workflows:
           source: true
 
     scripts:
-      - name: Install npm dependencies
+      - name: Install npm dependencies cleanly
         script: |
-          set -e
+          set -euxo pipefail
           rm -rf node_modules
-          rm -f package-lock.json
-          npm cache verify
-          npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund --package-lock=false
+          rm -f package-lock.json npm-shrinkwrap.json
+          npm cache clean --force
+          npm config set package-lock false
+          npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Build web app
         script: |
-          set -e
+          set -euxo pipefail
           npm run build
 
       - name: Sync Capacitor iOS
         script: |
-          set -e
+          set -euxo pipefail
           npx cap sync ios
 
       - name: Install CocoaPods
         script: |
-          set -e
+          set -euxo pipefail
           cd ios/App
           pod install --repo-update
           cd ../..
 
       - name: Set up code signing
         script: |
-          set -e
+          set -euxo pipefail
           keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
@@ -71,7 +71,7 @@ workflows:
 
       - name: Build IPA
         script: |
-          set -e
+          set -euxo pipefail
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
