@@ -38,7 +38,7 @@ workflows:
         script: |
           set -e
           rm -rf node_modules
-          npm ci --include=optional --no-audit --no-fund
+          npm install --ignore-scripts --no-audit --no-fund
 
       - name: Prepare Capacitor web directory
         script: |
