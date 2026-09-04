@@ -1,8 +1,8 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight workflow
 # Fresh workflow id to force Codemagic to discard stale configuration
 workflows:
-  ios-testflight-v4:
-    name: iOS TestFlight v4
+  ios-testflight-v5:
+    name: iOS TestFlight v5
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -64,8 +64,10 @@ workflows:
         script: |
           set -euxo pipefail
           keychain initialize
+          openssl genrsa -out "$CM_BUILD_DIR/ios_distribution_private_key.pem" 2048
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
+            --certificate-key "@file:$CM_BUILD_DIR/ios_distribution_private_key.pem" \
             --create
           keychain add-certificates
           xcode-project use-profiles
