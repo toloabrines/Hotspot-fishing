@@ -38,7 +38,7 @@ workflows:
         script: |
           set -e
           rm -rf node_modules
-          npm install --legacy-peer-deps --no-audit --no-fund
+          npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
       - name: Build web app
         script: |
