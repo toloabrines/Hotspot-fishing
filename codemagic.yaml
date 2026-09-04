@@ -37,7 +37,8 @@ workflows:
       - name: Install npm dependencies
         script: |
           set -e
-          npm install --ignore-scripts --no-audit --no-fund
+          rm -f package-lock.json
+          npm install --ignore-scripts --no-audit --no-fund --package-lock=false
 
       - name: Prepare Capacitor web directory
         script: |
