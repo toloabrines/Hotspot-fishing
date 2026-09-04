@@ -1,29 +1,23 @@
-# Hotspot Fishing — Codemagic iOS/TestFlight workflow
-# Fresh workflow id to force Codemagic to discard stale configuration
 workflows:
-  ios-testflight-v2:
-    name: iOS TestFlight v2
-    max_build_duration: 90
+  ios-testflight:
+    name: iOS TestFlight
+    max_build_duration: 60
     instance_type: mac_mini_m2
 
     integrations:
       app_store_connect: codemagic_asc_api_key
 
     environment:
+      groups:
+        - APP_STORE_CONNECT_KEY_ID
       vars:
-        APP_STORE_APPLE_ID: "6771454287"
+        APP_STORE_APPLE_ID: 6771454287
         BUNDLE_ID: "app.lovable.hotspotfishing"
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-        CI: "true"
-      node: 22
-      xcode: 16.2
+      node: 20
+      xcode: latest
       cocoapods: default
-
-    cache:
-      cache_paths:
-        - ~/.npm
-        - $HOME/Library/Caches/CocoaPods
 
     triggering:
       events:
@@ -34,42 +28,35 @@ workflows:
           source: true
 
     scripts:
-      - name: Install npm dependencies
+      - name: Set up keychain to be used for code signing using Codemagic CLI 'keychain' command
+        script: keychain initialize
+      - name: Fetch signing files
         script: |
-          set -e
-          npm install --ignore-scripts --no-audit --no-fund
-
-      - name: Prepare Capacitor web directory
-        script: |
-          set -e
-          mkdir -p dist
-          printf '%s\n' '<html><body>Loading...</body></html>' > dist/index.html
-
-      - name: Sync Capacitor iOS
-        script: |
-          set -e
-          npx --no-install cap sync ios
-
-      - name: Install CocoaPods
-        script: |
-          set -e
-          cd ios/App
-          pod install --repo-update
-          cd ../..
-
-      - name: Set up code signing
-        script: |
-          set -e
-          keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create
-          keychain add-certificates
-          xcode-project use-profiles
-
-      - name: Build IPA
+      - name: Set up signing certificate
+        script: keychain add-certificates
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
+      - name: Install npm dependencies
         script: |
-          set -e
+          npm ci || npm install
+      - name: Build web assets
+        script: |
+          npm run build
+      - name: Capacitor sync iOS
+        script: |
+          npx cap sync ios
+      - name: Install CocoaPods
+        script: |
+          cd ios/App && pod install --repo-update
+      - name: Set build number
+        script: |
+          cd ios/App
+          agvtool new-version -all $(($BUILD_NUMBER + 100))
+      - name: Build ipa
+        script: |
           xcode-project build-ipa \
             --workspace "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
@@ -77,11 +64,11 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-      - ios/App/build/**/*.app
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app.dSYM.zip
 
     publishing:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-        submit_to_app_store: false
+        beta_groups:
+          - Internal Testers
