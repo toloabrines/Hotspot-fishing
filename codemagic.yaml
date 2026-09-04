@@ -38,18 +38,17 @@ workflows:
         script: |
           set -e
           rm -rf node_modules
-          npm install --ignore-scripts --no-audit --no-fund
+          npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Prepare Capacitor web directory
+      - name: Build web app
         script: |
           set -e
-          mkdir -p dist
-          printf '%s\n' '<html><body>Loading...</body></html>' > dist/index.html
+          npm run build
 
       - name: Sync Capacitor iOS
         script: |
           set -e
-          npx --no-install cap sync ios
+          npx cap sync ios
 
       - name: Install CocoaPods
         script: |
