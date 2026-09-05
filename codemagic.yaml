@@ -1,8 +1,8 @@
-# Hotspot Fishing — Codemagic iOS/TestFlight workflow
-# v7: keep the legacy workflow ID so Codemagic loads the current v7 configuration
+# Hotspot Fishing — Codemagic iOS/TestFlight
+# Keep the existing workflow ID and visible name so Codemagic uses this configuration.
 workflows:
   ios-testflight:
-    name: iOS TestFlight v7
+    name: iOS TestFlight
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -33,22 +33,22 @@ workflows:
           source: true
 
     scripts:
-      - name: Install dependencies v7 — npm install (NO npm ci)
+      - name: Install npm dependencies
         script: |
           set -euxo pipefail
-          echo "WORKFLOW V7 — npm install only; npm ci is disabled"
-          echo "Using Node $(node --version) / npm $(npm --version)"
+          echo "HOTSPOT FIXED WORKFLOW — npm ci disabled"
+          echo "Node: $(node --version)  npm: $(npm --version)"
           rm -rf node_modules
           rm -f package-lock.json npm-shrinkwrap.json
           npm cache clean --force
           npm install --legacy-peer-deps --no-audit --no-fund --package-lock=false
 
-      - name: Build web app
+      - name: Build web assets
         script: |
           set -euxo pipefail
           npm run build
 
-      - name: Sync Capacitor iOS
+      - name: Capacitor sync iOS
         script: |
           set -euxo pipefail
           npx cap sync ios
