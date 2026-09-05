@@ -9,6 +9,15 @@ import {
 type CheckoutSessionResult = { clientSecret: string } | { error: string };
 type PortalSessionResult = { url: string } | { error: string };
 
+/**
+ * Scope privado de los cobros de Hotspot Fishing.
+ *
+ * IMPORTANTE: no reutilizar clientes de Stripe creados para otros negocios
+ * (por ejemplo licencias de pesca) aunque tengan el mismo email. Esto mantiene
+ * suscripciones, portal y webhooks de Hotspot completamente separados.
+ */
+const HOTSPOT_STRIPE_SCOPE = "hotspot_fishing";
+
 async function resolveOrCreateCustomer(
   stripe: ReturnType<typeof createStripeClient>,
   options: { email?: string; userId: string },
@@ -16,28 +25,22 @@ async function resolveOrCreateCustomer(
   if (!/^[a-zA-Z0-9_-]+$/.test(options.userId)) {
     throw new Error("Invalid userId");
   }
+
+  // Sólo aceptamos clientes creados expresamente para Hotspot. No buscamos ni
+  // reutilizamos por email para evitar mezclar una persona que también haya
+  // pagado una licencia de pesca u otro producto en la misma cuenta Stripe.
   const found = await stripe.customers.search({
-    query: `metadata['userId']:'${options.userId}'`,
+    query: `metadata['userId']:'${options.userId}' AND metadata['appScope']:'${HOTSPOT_STRIPE_SCOPE}'`,
     limit: 1,
   });
   if (found.data.length) return found.data[0].id;
 
-  if (options.email) {
-    const existing = await stripe.customers.list({ email: options.email, limit: 1 });
-    if (existing.data.length) {
-      const customer = existing.data[0];
-      if (customer.metadata?.userId !== options.userId) {
-        await stripe.customers.update(customer.id, {
-          metadata: { ...customer.metadata, userId: options.userId },
-        });
-      }
-      return customer.id;
-    }
-  }
-
   const created = await stripe.customers.create({
     ...(options.email && { email: options.email }),
-    metadata: { userId: options.userId },
+    metadata: {
+      userId: options.userId,
+      appScope: HOTSPOT_STRIPE_SCOPE,
+    },
   });
   return created.id;
 }
@@ -78,6 +81,8 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         description = product.name;
       }
 
+      const paymentPurpose = isRecurring ? "hotspot_subscription" : pack ? "ai_credits" : "hotspot_payment";
+
       const session = await stripe.checkout.sessions.create({
         line_items: [{ price: stripePrice.id, quantity: 1 }],
         mode: isRecurring ? "subscription" : "payment",
@@ -86,10 +91,20 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         customer: customerId,
         metadata: {
           userId,
+          appScope: HOTSPOT_STRIPE_SCOPE,
+          paymentPurpose,
           ...(pack && { aiCredits: String(pack.credits), packPriceId: pack.priceId }),
         },
         ...(isRecurring
-          ? { subscription_data: { metadata: { userId } } }
+          ? {
+              subscription_data: {
+                metadata: {
+                  userId,
+                  appScope: HOTSPOT_STRIPE_SCOPE,
+                  paymentPurpose: "hotspot_subscription",
+                },
+              },
+            }
           : { payment_intent_data: { description } }),
         managed_payments: { enabled: true },
       } as any);
@@ -130,4 +145,3 @@ export const createPortalSession = createServerFn({ method: "POST" })
       return { error: getStripeErrorMessage(error) };
     }
   });
-
