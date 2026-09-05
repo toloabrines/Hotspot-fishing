@@ -1,9 +1,9 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight workflow
 # Fresh workflow id to force Codemagic to discard stale configuration
-# Trigger refresh 2026-09-05: force Codemagic to reload v5 from main
+# Trigger refresh 2026-09-05: force Codemagic to reload v6 from main
 workflows:
-  ios-testflight-v5:
-    name: iOS TestFlight v5
+  ios-testflight-v6:
+    name: iOS TestFlight v6
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -34,9 +34,10 @@ workflows:
           source: true
 
     scripts:
-      - name: Install npm dependencies cleanly
+      - name: Install dependencies v6 — npm install (NO npm ci)
         script: |
           set -euxo pipefail
+          echo "WORKFLOW V6 — using npm install, not npm ci"
           echo "Using Node $(node --version) / npm $(npm --version)"
           rm -rf node_modules
           rm -f package-lock.json npm-shrinkwrap.json
