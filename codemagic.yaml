@@ -1,7 +1,7 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight workflow
-# v7: force Codemagic to reload current workflow and avoid npm ci/package-lock failures
+# v7: keep the legacy workflow ID so Codemagic loads the current v7 configuration
 workflows:
-  ios-testflight-v7:
+  ios-testflight:
     name: iOS TestFlight v7
     max_build_duration: 90
     instance_type: mac_mini_m2
