@@ -1,29 +1,47 @@
-name: Update Node.js to 22
+name: Repair npm lock and build
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  repair-and-build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
-      - name: Setup Node.js
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Install dependencies
-        run: npm install --ignore-scripts
+      - name: Regenerate clean package-lock
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --package-lock-only --ignore-scripts
+          npm ci --ignore-scripts
 
       - name: Build project
         run: npm run build
 
+      - name: Commit repaired package-lock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo "package-lock.json is already correct"
+          else
+            git commit -m "fix: regenerate package-lock for npm ci"
+            git push origin HEAD:main
+          fi
