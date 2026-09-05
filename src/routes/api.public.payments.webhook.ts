@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { type StripeEnv, verifyWebhook } from "@/lib/stripe.server";
+import { MODULE_BY_PRICE_ID } from "@/lib/modules";
+
+const HOTSPOT_STRIPE_SCOPE = "hotspot_fishing";
 
 let _supabase: any = null;
 function getSupabase(): any {
@@ -19,7 +22,23 @@ function priceKey(item: any): string {
   );
 }
 
+/**
+ * Reconoce exclusivamente suscripciones pertenecientes a Hotspot Fishing.
+ * Las nuevas llevan appScope. El precio reconocido mantiene compatibles las
+ * suscripciones de Hotspot creadas antes de introducir este aislamiento.
+ */
+function isHotspotSubscription(subscription: any): boolean {
+  if (subscription?.metadata?.appScope === HOTSPOT_STRIPE_SCOPE) return true;
+  const item = subscription?.items?.data?.[0];
+  return Boolean(MODULE_BY_PRICE_ID[priceKey(item)]);
+}
+
 async function upsertSubscription(subscription: any, env: StripeEnv) {
+  if (!isHotspotSubscription(subscription)) {
+    console.log("Ignoring non-Hotspot subscription event", subscription?.id);
+    return;
+  }
+
   const userId = subscription.metadata?.userId;
   if (!userId) {
     console.error("No userId in subscription metadata", subscription.id);
@@ -54,6 +73,11 @@ async function upsertSubscription(subscription: any, env: StripeEnv) {
 }
 
 async function markCanceled(subscription: any, env: StripeEnv) {
+  if (!isHotspotSubscription(subscription)) {
+    console.log("Ignoring non-Hotspot cancellation", subscription?.id);
+    return;
+  }
+
   await getSupabase()
     .from("subscriptions")
     .update({ status: "canceled", updated_at: new Date().toISOString() })
@@ -63,6 +87,16 @@ async function markCanceled(subscription: any, env: StripeEnv) {
 
 /** Abona los créditos de un paquete de consultas extra (idempotente). */
 async function grantAiCredits(session: any, env: StripeEnv) {
+  // Un pago único ajeno a Hotspot (por ejemplo una licencia de pesca) jamás
+  // debe tocar los créditos ni las tablas de Hotspot.
+  if (
+    session?.metadata?.appScope !== HOTSPOT_STRIPE_SCOPE ||
+    session?.metadata?.paymentPurpose !== "ai_credits"
+  ) {
+    console.log("Ignoring non-Hotspot one-time payment", session?.id);
+    return;
+  }
+
   const userId = session.metadata?.userId;
   const credits = Number(session.metadata?.aiCredits ?? 0);
   if (!userId || !Number.isFinite(credits) || credits <= 0) return;
@@ -125,4 +159,3 @@ export const Route = createFileRoute("/api/public/payments/webhook")({
     },
   },
 });
-
