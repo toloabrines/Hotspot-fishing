@@ -1,5 +1,4 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight
-# Keep the existing workflow ID and visible name so Codemagic uses this configuration.
 workflows:
   ios-testflight:
     name: iOS TestFlight
@@ -10,6 +9,9 @@ workflows:
       app_store_connect: codemagic_asc_api_key
 
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: app.lovable.hotspotfishing
       vars:
         APP_STORE_APPLE_ID: "6771454287"
         BUNDLE_ID: "app.lovable.hotspotfishing"
@@ -60,16 +62,9 @@ workflows:
           pod install --repo-update
           cd ../..
 
-      - name: Set up code signing
+      - name: Apply provisioning profiles to Xcode project
         script: |
           set -euxo pipefail
-          keychain initialize
-          openssl genrsa -out "$CM_BUILD_DIR/ios_distribution_private_key.pem" 2048
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --certificate-key "@file:$CM_BUILD_DIR/ios_distribution_private_key.pem" \
-            --create
-          keychain add-certificates
           xcode-project use-profiles
 
       - name: Build IPA
