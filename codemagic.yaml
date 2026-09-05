@@ -64,12 +64,18 @@ workflows:
           pod install --repo-update
           cd ../..
 
-      - name: Apply provisioning profile to App project
+      - name: Initialize keychain
+        script: keychain initialize
+
+      - name: Fetch signing files
         script: |
-          set -euxo pipefail
-          echo "Provisioning profiles available:"
-          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles" || true
-          xcode-project use-profiles --project "$CM_BUILD_DIR/$XCODE_PROJECT"
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+
+      - name: Add signing certificate
+        script: keychain add-certificates
+
+      - name: Use profiles
+        script: xcode-project use-profiles
 
       - name: Build IPA
         script: |
