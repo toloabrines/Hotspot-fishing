@@ -1,7 +1,7 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight
 workflows:
-  ios-testflight:
-    name: iOS TestFlight
+  ios-testflight-pnpm:
+    name: HOTSPOT iOS TestFlight PNPM
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -35,13 +35,12 @@ workflows:
           source: true
 
     scripts:
-      - name: Install JS dependencies (pnpm, ignore broken npm lock)
+      - name: Install JS dependencies (PNPM ONLY)
         script: |
           set -euxo pipefail
-          echo "HOTSPOT PNPM WORKFLOW — npm/package-lock bypassed"
+          echo "HOTSPOT PNPM WORKFLOW — DO NOT USE NPM CI"
           echo "Node: $(node --version)"
           rm -rf node_modules
-          rm -f pnpm-lock.yaml
           corepack enable
           corepack prepare pnpm@10.15.1 --activate
           pnpm --version
