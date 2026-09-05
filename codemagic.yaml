@@ -15,6 +15,7 @@ workflows:
       vars:
         APP_STORE_APPLE_ID: "6771454287"
         BUNDLE_ID: "app.lovable.hotspotfishing"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
         CI: "true"
@@ -63,16 +64,18 @@ workflows:
           pod install --repo-update
           cd ../..
 
-      - name: Apply provisioning profiles to Xcode project
+      - name: Apply provisioning profile to App project
         script: |
           set -euxo pipefail
-          xcode-project use-profiles
+          echo "Provisioning profiles available:"
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles" || true
+          xcode-project use-profiles --project "$CM_BUILD_DIR/$XCODE_PROJECT"
 
       - name: Build IPA
         script: |
           set -euxo pipefail
           xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
+            --workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
