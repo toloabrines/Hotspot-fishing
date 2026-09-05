@@ -1,0 +1,48 @@
+name: Migrate dependencies to pnpm
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/migrate-to-pnpm.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Create clean pnpm lockfile and verify install
+        run: |
+          set -euxo pipefail
+          corepack enable
+          corepack prepare pnpm@10.15.1 --activate
+          rm -rf node_modules package-lock.json pnpm-lock.yaml
+          node -e "let p=require('./package.json'); p.packageManager='pnpm@10.15.1'; require('fs').writeFileSync('package.json', JSON.stringify(p,null,2)+'\n')"
+          pnpm install --lockfile-only
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Commit pnpm migration
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A package.json package-lock.json pnpm-lock.yaml
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -m "fix: replace broken npm lock with pnpm lock"
+            git push origin HEAD:main
+          fi
