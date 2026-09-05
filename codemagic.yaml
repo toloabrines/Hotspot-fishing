@@ -1,9 +1,8 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight workflow
-# Fresh workflow id to force Codemagic to discard stale configuration
-# Trigger refresh 2026-09-05: force Codemagic to reload v6 from main
+# v7: force Codemagic to reload current workflow and avoid npm ci/package-lock failures
 workflows:
-  ios-testflight-v6:
-    name: iOS TestFlight v6
+  ios-testflight-v7:
+    name: iOS TestFlight v7
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -34,16 +33,15 @@ workflows:
           source: true
 
     scripts:
-      - name: Install dependencies v6 — npm install (NO npm ci)
+      - name: Install dependencies v7 — npm install (NO npm ci)
         script: |
           set -euxo pipefail
-          echo "WORKFLOW V6 — using npm install, not npm ci"
+          echo "WORKFLOW V7 — npm install only; npm ci is disabled"
           echo "Using Node $(node --version) / npm $(npm --version)"
           rm -rf node_modules
           rm -f package-lock.json npm-shrinkwrap.json
           npm cache clean --force
-          npm config set package-lock false
-          npm install --legacy-peer-deps --no-audit --no-fund
+          npm install --legacy-peer-deps --no-audit --no-fund --package-lock=false
 
       - name: Build web app
         script: |
