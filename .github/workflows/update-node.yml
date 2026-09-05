@@ -1,9 +1,6 @@
 name: Repair npm lock and build
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -25,11 +22,10 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Regenerate clean package-lock
+      - name: Regenerate package-lock
         run: |
           rm -rf node_modules package-lock.json
-          npm install --package-lock-only --ignore-scripts
-          npm ci --ignore-scripts
+          npm install --ignore-scripts
 
       - name: Build project
         run: npm run build
@@ -42,6 +38,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "package-lock.json is already correct"
           else
-            git commit -m "fix: regenerate package-lock for npm ci"
+            git commit -m "fix: regenerate package-lock"
             git push origin HEAD:main
           fi
