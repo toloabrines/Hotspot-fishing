@@ -64,17 +64,7 @@ workflows:
           pod install --repo-update
           cd ../..
 
-      - name: Initialize keychain
-        script: keychain initialize
-
-      - name: Fetch signing files
-        script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
-
-      - name: Add signing certificate
-        script: keychain add-certificates
-
-      - name: Use profiles
+      - name: Apply signing settings to Xcode project
         script: xcode-project use-profiles
 
       - name: Build IPA
