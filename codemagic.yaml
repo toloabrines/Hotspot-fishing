@@ -1,5 +1,6 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight workflow
 # Fresh workflow id to force Codemagic to discard stale configuration
+# Trigger refresh 2026-09-05: force Codemagic to reload v5 from main
 workflows:
   ios-testflight-v5:
     name: iOS TestFlight v5
