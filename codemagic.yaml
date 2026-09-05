@@ -35,25 +35,27 @@ workflows:
           source: true
 
     scripts:
-      - name: Install npm dependencies
+      - name: Install JS dependencies (pnpm, ignore broken npm lock)
         script: |
           set -euxo pipefail
-          echo "HOTSPOT FIXED WORKFLOW — npm ci disabled"
-          echo "Node: $(node --version)  npm: $(npm --version)"
+          echo "HOTSPOT PNPM WORKFLOW — npm/package-lock bypassed"
+          echo "Node: $(node --version)"
           rm -rf node_modules
-          rm -f package-lock.json npm-shrinkwrap.json
-          npm cache clean --force
-          npm install --legacy-peer-deps --no-audit --no-fund --package-lock=false
+          rm -f pnpm-lock.yaml
+          corepack enable
+          corepack prepare pnpm@10.15.1 --activate
+          pnpm --version
+          pnpm install --no-frozen-lockfile
 
       - name: Build web assets
         script: |
           set -euxo pipefail
-          npm run build
+          pnpm run build
 
       - name: Capacitor sync iOS
         script: |
           set -euxo pipefail
-          npx cap sync ios
+          pnpm exec cap sync ios
 
       - name: Install CocoaPods
         script: |
