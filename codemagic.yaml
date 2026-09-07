@@ -1,23 +1,16 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight
+# Firma manual: evita la integración App Store Connect de Codemagic que devuelve 401.
 workflows:
   ios-testflight-pnpm:
-    name: HOTSPOT iOS TestFlight PNPM
+    name: HOTSPOT iOS TestFlight — manual signing
     max_build_duration: 90
     instance_type: mac_mini_m2
 
-    integrations:
-      app_store_connect: codemagic_asc_api_key
-
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.lovable.hotspotfishing
+      groups:
+        - appstore_credentials
       vars:
-        APP_STORE_APPLE_ID: "6771454287"
-        BUNDLE_ID: "app.lovable.hotspotfishing"
-        XCODE_PROJECT: "ios/App/App.xcodeproj"
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
-        XCODE_SCHEME: "App"
+        IOS_BUNDLE_ID: "app.lovable.hotspotfishing"
         CI: "true"
       node: 22
       xcode: 16.2
@@ -26,6 +19,7 @@ workflows:
     cache:
       cache_paths:
         - $HOME/Library/Caches/CocoaPods
+        - $HOME/.bundle
 
     triggering:
       events:
@@ -36,52 +30,43 @@ workflows:
           source: true
 
     scripts:
-      - name: Install JS dependencies (PNPM ONLY)
+      - name: Validate manual signing credentials
+        script: |
+          set -euo pipefail
+          missing=""
+          for key in APPLE_TEAM_ID IOS_BUNDLE_ID APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_P8 IOS_DIST_CERT_P12_BASE64 IOS_DIST_CERT_PASSWORD IOS_PROVISIONING_PROFILE_BASE64; do
+            eval "value=\${$key:-}"
+            if [ -z "$value" ]; then missing="$missing $key"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "Missing Codemagic variables:$missing"
+            exit 1
+          fi
+          echo "Manual signing credentials are present."
+
+      - name: Install dependencies and prepare iOS
         script: |
           set -euxo pipefail
-          echo "HOTSPOT PNPM WORKFLOW — DO NOT USE NPM CI"
-          echo "Node: $(node --version)"
-          rm -rf node_modules
           corepack enable
           corepack prepare pnpm@10.15.1 --activate
-          pnpm --version
           pnpm install --no-frozen-lockfile
-
-      - name: Build web assets
-        script: |
-          set -euxo pipefail
           pnpm run build
-
-      - name: Capacitor sync iOS
-        script: |
-          set -euxo pipefail
           pnpm exec cap sync ios
-
-      - name: Install CocoaPods
-        script: |
-          set -euxo pipefail
           cd ios/App
           pod install --repo-update
           cd ../..
+          bundle install
 
-      - name: Apply signing settings to Xcode project
-        script: xcode-project use-profiles
-
-      - name: Build IPA
+      - name: Build and upload to TestFlight with Fastlane
         script: |
           set -euxo pipefail
-          xcode-project build-ipa \
-            --workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
+          export KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+          export BUILD_NUMBER="${BUILD_NUMBER:-${CM_BUILD_ID:0:8}}"
+          export IOS_PROJECT_PREPARED="true"
+          bundle exec fastlane ios beta
 
     artifacts:
-      - build/ios/ipa/*.ipa
+      - build/*.ipa
       - /tmp/xcodebuild_logs/*.log
-      - ios/App/build/**/*.app
+      - $HOME/Library/Logs/gym/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
-
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
-        submit_to_app_store: false
