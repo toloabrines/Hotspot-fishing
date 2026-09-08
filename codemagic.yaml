@@ -1,9 +1,9 @@
-# Hotspot Fishing — Codemagic iOS/TestFlight
-# Firma manual: evita la integración App Store Connect de Codemagic que devuelve 401.
-# Forzado 2026-09-08 13:27: usar SOLO este workflow YAML y no el flujo antiguo del Workflow Editor.
+# Hotspot Fishing — Codemagic iOS/App Store
+# Firma manual para evitar la integración App Store Connect de Codemagic que devolvía 401.
+# Este workflow compila la app y la sube a App Store Connect sin enviarla automáticamente a revisión.
 workflows:
-  ios-testflight-pnpm:
-    name: HOTSPOT iOS TestFlight — FIX 13:27 manual signing
+  ios-app-store:
+    name: iOS App Store
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -31,7 +31,7 @@ workflows:
           source: true
 
     scripts:
-      - name: Validate manual signing credentials
+      - name: Validate App Store signing credentials
         script: |
           set -euo pipefail
           missing=""
@@ -43,7 +43,7 @@ workflows:
             echo "Missing Codemagic variables:$missing"
             exit 1
           fi
-          echo "Manual signing credentials are present."
+          echo "App Store signing credentials are present."
 
       - name: Install dependencies and prepare iOS
         script: |
@@ -58,13 +58,13 @@ workflows:
           cd ../..
           bundle install
 
-      - name: Build and upload to TestFlight with Fastlane
+      - name: Build and upload to App Store Connect with Fastlane
         script: |
           set -euxo pipefail
           export KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
           export BUILD_NUMBER="${BUILD_NUMBER:-${CM_BUILD_ID:0:8}}"
           export IOS_PROJECT_PREPARED="true"
-          bundle exec fastlane ios beta
+          bundle exec fastlane ios release
 
     artifacts:
       - build/*.ipa
