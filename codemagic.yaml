@@ -5,10 +5,9 @@ workflows:
     max_build_duration: 90
     instance_type: mac_mini_m2
 
-    integrations:
-      app_store_connect: codemagic_asc_api_key
-
     environment:
+      groups:
+        - appstore_credentials
       ios_signing:
         distribution_type: app_store
         bundle_identifier: app.lovable.hotspotfishing
@@ -82,6 +81,8 @@ workflows:
 
     publishing:
       app_store_connect:
-        auth: integration
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
         submit_to_app_store: false
