@@ -1,9 +1,9 @@
 # Hotspot Fishing — Codemagic iOS/TestFlight
 # Firma manual: evita la integración App Store Connect de Codemagic que devuelve 401.
-# Rebuild forzado 2026-09-07: usar este workflow, no el antiguo de "Set up code signing".
+# Forzado 2026-09-08 13:21: NO usar el flujo antiguo que ejecuta "Fetch or create App Store signing files".
 workflows:
   ios-testflight-pnpm:
-    name: HOTSPOT iOS TestFlight — manual signing
+    name: HOTSPOT iOS TestFlight — FIX 13:21 manual signing
     max_build_duration: 90
     instance_type: mac_mini_m2
 
