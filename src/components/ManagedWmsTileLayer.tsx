@@ -31,6 +31,31 @@ function cleanupManagedTileContainers(paneElement: HTMLElement | null) {
     });
 }
 
+/**
+ * Leaflet's `detectRetina` halves the logical tile size on HiDPI screens.
+ * That is useful on a desktop monitor, but on a phone it can turn every WMS
+ * layer into roughly four times as many network requests and decoded images.
+ * Keep Retina tiles for capable desktops and use the normal 256 px budget on
+ * phones/tablets, where fast pan/zoom is more valuable than over-sampling.
+ */
+function mobileTileBudget() {
+  if (typeof navigator === "undefined") {
+    return { detectRetina: false, keepBuffer: 1 };
+  }
+
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const userAgent = nav.userAgent ?? "";
+  const isTouchIos = nav.platform === "MacIntel" && nav.maxTouchPoints > 1;
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent) || isTouchIos;
+  const hasLimitedMemory =
+    typeof nav.deviceMemory === "number" && nav.deviceMemory > 0 && nav.deviceMemory <= 4;
+
+  return {
+    detectRetina: !isMobile && !hasLimitedMemory,
+    keepBuffer: isMobile || hasLimitedMemory ? 1 : 2,
+  };
+}
+
 export function ManagedWmsTileLayer({
   attribution = "",
   blendMode,
@@ -78,25 +103,24 @@ export function ManagedWmsTileLayer({
     const paneElement = map.getPane(pane) ?? null;
     cleanupManagedTileContainers(paneElement);
 
-    // HiDPI / Retina: pedimos teselas al doble de resolución en pantallas con
-    // devicePixelRatio > 1. Esto duplica los píxeles efectivos del WMS y hace
-    // que el contorno de la costa, las isobatas y el hillshade se vean nítidos
-    // al hacer zoom (sin pixelado, sin escalado borroso). Combinado con
-    // `image-rendering: high-quality` (bicubic) en CSS, da el efecto de
-    // antialiasing en costas como Mallorca, Alcúdia y Palma.
+    const tileBudget = mobileTileBudget();
+
+    // HiDPI / Retina se mantiene en escritorio. En móvil usamos el presupuesto
+    // normal de 256 px para evitar multiplicar las peticiones de todas las
+    // capas WMS; el suavizado CSS conserva una lectura limpia de la carta.
     const layer = L.tileLayer.wms(url, {
       attribution,
       className: [className, "ocean-tile-smooth"].filter(Boolean).join(" "),
       crossOrigin: true,
       crs: L.CRS.EPSG3857,
-      keepBuffer: 2,
+      keepBuffer: tileBudget.keepBuffer,
       maxNativeZoom,
       maxZoom,
       minZoom,
       opacity,
       pane,
       tileSize: 256,
-      detectRetina: true,
+      detectRetina: tileBudget.detectRetina,
       updateWhenIdle: true,
       updateWhenZooming: false,
       uppercase: true,
@@ -180,4 +204,3 @@ export function ManagedWmsTileLayer({
 
   return null;
 }
-

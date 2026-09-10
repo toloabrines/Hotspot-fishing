@@ -1,10 +1,16 @@
 /* Hotspot Fishing — limpieza PWA para iOS.
- * Desactiva el service worker y elimina sus cachés para evitar que la app
- * instalada en pantalla de inicio cargue JS/CSS antiguos. El manifest sigue
- * permitiendo abrir la web como app standalone, pero siempre desde red.
+ * Desactiva el service worker y elimina sus cachés de aplicación para evitar
+ * que la app instalada en pantalla de inicio cargue JS/CSS antiguos. Conserva
+ * únicamente los datos batimétricos; el manifest permite abrir la web como app
+ * standalone, pero los archivos de la aplicación siempre llegan desde red.
  */
 (function () {
   if (!("serviceWorker" in navigator)) return;
+
+  // Esta caché contiene únicamente bloques batimétricos ya consultados. No
+  // guarda JS/CSS de la aplicación, por lo que conservarla no puede mostrar
+  // una versión antigua y acelera las zonas que el usuario vuelve a visitar.
+  var PERSISTENT_DATA_CACHES = ["dem-json-v1"];
 
   window.addEventListener("load", function () {
     (async function () {
@@ -21,9 +27,13 @@
         if ("caches" in window) {
           var keys = await caches.keys();
           await Promise.all(
-            keys.map(function (key) {
-              return caches.delete(key);
-            }),
+            keys
+              .filter(function (key) {
+                return PERSISTENT_DATA_CACHES.indexOf(key) === -1;
+              })
+              .map(function (key) {
+                return caches.delete(key);
+              }),
           );
         }
 
