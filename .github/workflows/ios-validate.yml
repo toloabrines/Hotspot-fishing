@@ -1,0 +1,71 @@
+name: iOS compile validation
+
+on:
+  push:
+    branches:
+      - codex/fix-ios-signing
+    paths: &ios_paths
+      - ".github/workflows/ios-validate.yml"
+      - "capacitor.config.ts"
+      - "ios/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "src/**"
+      - "vite.config.*"
+  pull_request:
+    branches:
+      - main
+    paths: *ios_paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator-build:
+    name: Build iOS simulator (no signing)
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.1 --activate
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build web app and sync Capacitor
+        run: |
+          pnpm run build
+          pnpm exec cap sync ios
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios/App
+        run: pod install --repo-update
+
+      - name: Compile iOS without signing
+        working-directory: ios/App
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
