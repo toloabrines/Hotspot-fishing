@@ -29,10 +29,7 @@ workflows:
       - name: Comprobar identificador de la app
         script: |
           set -euo pipefail
-          ACTUAL_BUNDLE_ID="$(node -p "require('./capacitor.config.ts').default?.appId || ''" 2>/dev/null || true)"
-          if [ -z "$ACTUAL_BUNDLE_ID" ]; then
-            ACTUAL_BUNDLE_ID="$(sed -n "s/.*appId: ['\"]\([^'\"]*\)['\"].*/\1/p" capacitor.config.ts | head -1)"
-          fi
+          ACTUAL_BUNDLE_ID="$(sed -n "s/.*appId: ['\"]\([^'\"]*\)['\"].*/\1/p" capacitor.config.ts | head -1)"
           if [ "$ACTUAL_BUNDLE_ID" != "$IOS_BUNDLE_ID" ]; then
             echo "Bundle ID incorrecto: '$ACTUAL_BUNDLE_ID' (esperado: '$IOS_BUNDLE_ID')"
             exit 1
@@ -53,7 +50,14 @@ workflows:
         script: |
           set -euxo pipefail
           cd ios/App
-          xcodebuild             -workspace App.xcworkspace             -scheme App             -configuration Debug             -sdk iphonesimulator             -destination 'generic/platform=iOS Simulator'             CODE_SIGNING_ALLOWED=NO             build
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
 
     artifacts:
       - /tmp/xcodebuild_logs/*.log
@@ -70,7 +74,6 @@ workflows:
         distribution_type: app_store
         bundle_identifier: app.lovable.hotspotfishing
       vars:
-        IOS_BUNDLE_ID: "app.lovable.hotspotfishing"
         XCODE_WORKSPACE: "App.xcworkspace"
         XCODE_SCHEME: "App"
         CI: "true"
@@ -104,7 +107,9 @@ workflows:
         script: |
           set -euxo pipefail
           cd ios/App
-          xcode-project build-ipa             --workspace "$XCODE_WORKSPACE"             --scheme "$XCODE_SCHEME"
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
