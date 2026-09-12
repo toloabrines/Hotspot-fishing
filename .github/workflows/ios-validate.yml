@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - codex/fix-ios-signing
-    paths:
+    paths: &ios_paths
       - ".github/workflows/ios-validate.yml"
       - "capacitor.config.ts"
       - "ios/**"
@@ -12,6 +12,10 @@ on:
       - "pnpm-lock.yaml"
       - "src/**"
       - "vite.config.*"
+  pull_request:
+    branches:
+      - main
+    paths: *ios_paths
   workflow_dispatch:
 
 permissions:
