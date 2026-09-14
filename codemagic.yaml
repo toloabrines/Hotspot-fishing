@@ -17,7 +17,7 @@ workflows:
         IOS_BUNDLE_ID: "app.lovable.hotspotfishing"
         CI: "true"
       node: 22
-      xcode: 16.2
+      xcode: 26.4
       cocoapods: default
 
     cache:
@@ -78,7 +78,7 @@ workflows:
         XCODE_SCHEME: "App"
         CI: "true"
       node: 22
-      xcode: 16.2
+      xcode: 26.4
       cocoapods: default
 
     cache:
