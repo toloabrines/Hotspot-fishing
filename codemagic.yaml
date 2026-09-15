@@ -189,3 +189,118 @@ workflows:
             --type IOS_APP_STORE \
             --name "Hotspot Fishing App Store 2026 v2" \
             --save
+
+
+  ios-appstore-complete-metadata:
+    name: iOS — Completar metadatos de App Store
+    max_build_duration: 10
+    instance_type: mac_mini_m2
+
+    environment:
+      xcode: 26.4
+
+    integrations:
+      app_store_connect: codemagic_hotspot_2026
+
+    scripts:
+      - name: Completar ficha inglesa, privacidad y categoría
+        script: |
+          set -euo pipefail
+          CODEMAGIC_PYTHON="$(head -n 1 "$(command -v app-store-connect)")"
+          CODEMAGIC_PYTHON="${CODEMAGIC_PYTHON#\#!}"
+          "$CODEMAGIC_PYTHON" <<'PY'
+          import json
+          import os
+          from codemagic.apple.app_store_connect.api_client import AppStoreConnectApiClient
+          from codemagic.tools.app_store_connect.arguments import Types
+
+          client = AppStoreConnectApiClient(
+              key_identifier=Types.KeyIdentifierArgument(os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"]).value,
+              issuer_id=Types.IssuerIdArgument(os.environ["APP_STORE_CONNECT_ISSUER_ID"]).value,
+              private_key=Types.PrivateKeyArgument(os.environ["APP_STORE_CONNECT_PRIVATE_KEY"]).value,
+          )
+          def request(method, path, payload=None):
+              response = client.session.request(method, f"{client.API_URL}{path}", json=payload)
+              if not response.ok:
+                  raise RuntimeError(f"{method} {path}: {response.status_code} {response.text}")
+              if response.status_code == 204:
+                  return None
+              return response.json()
+
+          en_version_loc = "67da2d12-e65e-405b-9ad1-e19434a1a156"
+          en_info_loc = "bf45d92e-bb36-4b93-aee8-6112ce7cb914"
+          es_info_loc = "1d2ec3b1-a8e3-48bb-86b3-b87cebfae80d"
+          app_info_id = "c7f7a308-5f67-481c-90de-bc302719cd5e"
+          privacy_url = "https://hotspotfishing.app/privacy"
+
+          english_description = """Hotspot Fishing is an advanced tool for sport anglers that combines real-time oceanographic data to help identify areas with strong fishing potential.
+
+          Features:
+
+          • Sea surface temperature (SST)
+          • Chlorophyll
+          • Ocean currents
+          • Bathymetry and underwater terrain
+          • Automatic hotspot identification
+          • Fishing activity analysis
+          • High-resolution interactive maps
+          • Precise coordinates for navigation
+
+          Designed for trolling, bottom fishing, jigging and sport fishing in general.
+
+          Spend less time searching. Spend more time fishing."""
+          english_description = "\n".join(line.strip() for line in english_description.splitlines())
+
+          request("PATCH", f"/appStoreVersionLocalizations/{en_version_loc}", {
+              "data": {
+                  "type": "appStoreVersionLocalizations",
+                  "id": en_version_loc,
+                  "attributes": {
+                      "description": english_description,
+                      "keywords": "fishing,bathymetry,chlorophyll,temperature,currents,hotspots,ocean,maps,navigation",
+                      "marketingUrl": "https://totymar.com/",
+                      "promotionalText": "Find promising fishing hotspots with sea temperature, chlorophyll, current and bathymetry maps.",
+                      "supportUrl": "https://hotspotfishing.app/support"
+                  }
+              }
+          })
+          request("PATCH", f"/appInfoLocalizations/{en_info_loc}", {
+              "data": {
+                  "type": "appInfoLocalizations",
+                  "id": en_info_loc,
+                  "attributes": {"privacyPolicyUrl": privacy_url}
+              }
+          })
+          request("PATCH", f"/appInfoLocalizations/{es_info_loc}", {
+              "data": {
+                  "type": "appInfoLocalizations",
+                  "id": es_info_loc,
+                  "attributes": {
+                      "subtitle": "Mapas y hotspots de pesca",
+                      "privacyPolicyUrl": privacy_url
+                  }
+              }
+          })
+          request("PATCH", f"/appInfos/{app_info_id}/relationships/primaryCategory", {
+              "data": {"type": "appCategories", "id": "SPORTS"}
+          })
+
+          en = request("GET", f"/appStoreVersionLocalizations/{en_version_loc}")["data"]["attributes"]
+          en_info = request("GET", f"/appInfoLocalizations/{en_info_loc}")["data"]["attributes"]
+          es_info = request("GET", f"/appInfoLocalizations/{es_info_loc}")["data"]["attributes"]
+          category = request("GET", f"/appInfos/{app_info_id}/primaryCategory").get("data")
+          verified = bool(
+              en.get("description") and en.get("keywords") and en.get("supportUrl")
+              and en_info.get("privacyPolicyUrl") and es_info.get("privacyPolicyUrl")
+              and category and category.get("id") == "SPORTS"
+          )
+          print("APP_STORE_METADATA_COMPLETED=" + json.dumps({
+              "verified": verified,
+              "englishVersionMetadata": bool(en.get("description") and en.get("keywords") and en.get("supportUrl")),
+              "privacyPolicyPresent": bool(en_info.get("privacyPolicyUrl") and es_info.get("privacyPolicyUrl")),
+              "spanishSubtitlePresent": bool(es_info.get("subtitle")),
+              "primaryCategory": category.get("id") if category else None
+          }))
+          if not verified:
+              raise RuntimeError("La verificación de metadatos no ha sido satisfactoria")
+          PY
