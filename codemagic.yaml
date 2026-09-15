@@ -1,8 +1,10 @@
 # Hotspot Fishing — Codemagic iOS
 #
-# Los dos flujos son manuales. Ninguno publica en App Store Connect.
+# Todos los flujos son manuales. Ninguno publica en App Store Connect.
 # 1) ios-validate comprueba que la app compila sin firma ni credenciales de Apple.
 # 2) ios-testflight crea una IPA firmada y la deja como artefacto para revisión.
+# 3) ios-signing-info consulta los identificadores de firma.
+# 4) ios-create-profile crea el perfil App Store vinculado al certificado nuevo.
 #
 # La subida a TestFlight se añadirá únicamente después de validar la IPA.
 
@@ -158,3 +160,24 @@ workflows:
           app-store-connect certificates list \
             --profile-type IOS_APP_STORE \
             --json
+
+  ios-create-profile:
+    name: iOS — Crear perfil App Store
+    max_build_duration: 15
+    instance_type: mac_mini_m2
+
+    environment:
+      xcode: 26.4
+
+    integrations:
+      app_store_connect: codemagic_hotspot_2026
+
+    scripts:
+      - name: Crear perfil vinculado al certificado nuevo
+        script: |
+          set -euxo pipefail
+          app-store-connect profiles create "42Z9XZ5SAA" \
+            --certificate-ids "54Z3LB277Y" \
+            --type IOS_APP_STORE \
+            --name "Hotspot Fishing App Store 2026 v2" \
+            --save
