@@ -22,9 +22,6 @@ workflows:
       xcode: 26.4
       cocoapods: default
 
-    integrations:
-      app_store_connect: codemagic_hotspot_2026
-
     cache:
       cache_paths:
         - $HOME/Library/Caches/CocoaPods
@@ -86,6 +83,9 @@ workflows:
       node: 22
       xcode: 26.4
       cocoapods: default
+
+    integrations:
+      app_store_connect: codemagic_hotspot_2026
 
     cache:
       cache_paths:
