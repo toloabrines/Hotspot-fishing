@@ -304,3 +304,61 @@ workflows:
           if not verified:
               raise RuntimeError("La verificación de metadatos no ha sido satisfactoria")
           PY
+
+  ios-testflight-status:
+    name: iOS — Comprobar estado en TestFlight
+    max_build_duration: 10
+    instance_type: mac_mini_m2
+
+    environment:
+      xcode: 26.4
+
+    integrations:
+      app_store_connect: codemagic_hotspot_2026
+
+    scripts:
+      - name: Consultar las últimas compilaciones sin modificar nada
+        script: |
+          set -euo pipefail
+          CODEMAGIC_PYTHON="$(head -n 1 "$(command -v app-store-connect)")"
+          CODEMAGIC_PYTHON="${CODEMAGIC_PYTHON#\#!}"
+          "$CODEMAGIC_PYTHON" <<'PY'
+          import json
+          import os
+          from codemagic.apple.app_store_connect.api_client import AppStoreConnectApiClient
+          from codemagic.tools.app_store_connect.arguments import Types
+
+          client = AppStoreConnectApiClient(
+              key_identifier=Types.KeyIdentifierArgument(os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"]).value,
+              issuer_id=Types.IssuerIdArgument(os.environ["APP_STORE_CONNECT_ISSUER_ID"]).value,
+              private_key=Types.PrivateKeyArgument(os.environ["APP_STORE_CONNECT_PRIVATE_KEY"]).value,
+          )
+
+          def get(path, params=None):
+              response = client.session.get(f"{client.API_URL}{path}", params=params)
+              if not response.ok:
+                  raise RuntimeError(f"GET {path}: {response.status_code} {response.text}")
+              return response.json()
+
+          apps = get("/apps", {"filter[bundleId]": "app.lovable.hotspotfishing", "limit": "1"}).get("data", [])
+          if not apps:
+              raise RuntimeError("No se encontró Hotspot Fishing en App Store Connect")
+
+          builds = get("/builds", {
+              "filter[app]": apps[0]["id"],
+              "sort": "-uploadedDate",
+              "limit": "10",
+          }).get("data", [])
+
+          result = [{
+              "id": build.get("id"),
+              "version": build.get("attributes", {}).get("version"),
+              "uploadedDate": build.get("attributes", {}).get("uploadedDate"),
+              "processingState": build.get("attributes", {}).get("processingState"),
+              "expired": build.get("attributes", {}).get("expired"),
+          } for build in builds]
+
+          print("TESTFLIGHT_STATUS=" + json.dumps(result, ensure_ascii=False))
+          print("TESTFLIGHT_BUILD_FOUND=" + ("true" if builds else "false"))
+          PY
+
