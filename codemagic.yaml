@@ -90,14 +90,20 @@ workflows:
         - $HOME/Library/Caches/pnpm
 
     scripts:
-      - name: Preparar icono obligatorio de iOS
+      - name: Preparar icono obligatorio de iOS sin transparencia
         script: |
           set -euxo pipefail
           ICON_SOURCE="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
           ICON_DEST="ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
+          ICON_TMP_JPG="/tmp/hotspot-app-icon.jpg"
           test -f "$ICON_SOURCE"
-          sips -s format png -z 1024 1024 "$ICON_SOURCE" --out "$ICON_DEST"
+          sips -s format jpeg -s formatOptions 100 -z 1024 1024 "$ICON_SOURCE" --out "$ICON_TMP_JPG"
+          sips -s format png "$ICON_TMP_JPG" --out "$ICON_DEST"
           test -s "$ICON_DEST"
+          if sips -g hasAlpha "$ICON_DEST" | grep -q "hasAlpha: yes"; then
+            echo "El icono iOS todavía contiene transparencia"
+            exit 1
+          fi
 
       - name: Instalar dependencias y preparar iOS
         script: |
