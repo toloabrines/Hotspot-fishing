@@ -1,12 +1,12 @@
 # Hotspot Fishing — Codemagic iOS
 #
-# Todos los flujos son manuales. La subida a TestFlight solo se activa con permiso explícito.
+# Todos los flujos son manuales. Ninguno publica en App Store Connect.
 # 1) ios-validate comprueba que la app compila sin firma ni credenciales de Apple.
-# 2) ios-testflight crea una IPA firmada y, en esta ejecución autorizada, la sube a TestFlight.
+# 2) ios-testflight crea una IPA firmada y la deja como artefacto para revisión.
 # 3) ios-signing-info consulta los identificadores de firma.
 # 4) ios-create-profile crea el perfil App Store vinculado al certificado nuevo.
 #
-# La IPA ya fue validada y el usuario autorizó esta subida a TestFlight.
+# La subida a TestFlight se añadirá únicamente después de validar la IPA.
 
 workflows:
   ios-validate:
@@ -67,7 +67,7 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
   ios-testflight:
-    name: iOS — Subir a TestFlight (autorizado)
+    name: iOS — Crear IPA firmada (sin subir)
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -83,9 +83,6 @@ workflows:
       node: 22
       xcode: 26.4
       cocoapods: default
-
-    integrations:
-      app_store_connect: codemagic_hotspot_2026
 
     cache:
       cache_paths:
@@ -131,12 +128,6 @@ workflows:
       - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
-
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
-        submit_to_app_store: false
 
   ios-signing-info:
     name: iOS — Comprobar firma de Apple
