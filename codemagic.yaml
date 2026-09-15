@@ -133,3 +133,28 @@ workflows:
       - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+  ios-signing-info:
+    name: iOS — Comprobar firma de Apple
+    max_build_duration: 15
+    instance_type: mac_mini_m2
+
+    environment:
+      vars:
+        BUNDLE_ID: "app.lovable.hotspotfishing"
+      xcode: 26.4
+
+    integrations:
+      app_store_connect: codemagic_hotspot_2026
+
+    scripts:
+      - name: Consultar Bundle ID y certificados
+        script: |
+          set -euxo pipefail
+          app-store-connect bundle-ids list \
+            --bundle-id-identifier "$BUNDLE_ID" \
+            --strict-match-identifier \
+            --json
+          app-store-connect certificates list \
+            --profile-type IOS_APP_STORE \
+            --json
