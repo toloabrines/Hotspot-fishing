@@ -67,7 +67,7 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
   ios-testflight:
-    name: iOS — Crear IPA firmada (sin subir)
+    name: iOS — Subir a TestFlight (icono corregido)
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -84,12 +84,24 @@ workflows:
       xcode: 26.4
       cocoapods: default
 
+    integrations:
+      app_store_connect: codemagic_hotspot_2026
+
     cache:
       cache_paths:
         - $HOME/Library/Caches/CocoaPods
         - $HOME/Library/Caches/pnpm
 
     scripts:
+      - name: Preparar icono obligatorio de iOS
+        script: |
+          set -euxo pipefail
+          ICON_SOURCE="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+          ICON_DEST="ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
+          test -f "$ICON_SOURCE"
+          sips -s format png -z 1024 1024 "$ICON_SOURCE" --out "$ICON_DEST"
+          test -s "$ICON_DEST"
+
       - name: Instalar dependencias y preparar iOS
         script: |
           set -euxo pipefail
@@ -128,6 +140,12 @@ workflows:
       - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
 
   ios-signing-info:
     name: iOS — Comprobar firma de Apple
