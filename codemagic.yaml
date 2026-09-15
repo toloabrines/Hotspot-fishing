@@ -77,12 +77,12 @@ workflows:
         XCODE_WORKSPACE: "App.xcworkspace"
         XCODE_SCHEME: "App"
         CI: "true"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: app.lovable.hotspotfishing
       node: 22
       xcode: 26.4
       cocoapods: default
-
-    integrations:
-      app_store_connect: codemagic_hotspot_2026
 
     cache:
       cache_paths:
@@ -105,13 +105,6 @@ workflows:
         script: |
           set -euxo pipefail
           keychain initialize
-
-      - name: Obtener o crear certificado y perfil de App Store
-        script: |
-          set -euxo pipefail
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
 
       - name: Añadir el certificado al llavero
         script: |
