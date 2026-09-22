@@ -70,7 +70,7 @@ const SST_PANE_CLASS = "ocean-pane-sst";
 const CHL_PANE_CLASS = "ocean-pane-chl";
 const ALT_PANE_CLASS = "ocean-pane-alt";
 const MAP_MIN_ZOOM = 2;
-const MAP_MAX_ZOOM = 19;
+const MAP_MAX_ZOOM = 22;
 const TILE_PALETTE_VERSION = "sst-red-client-contrast-v21";
 
 type MapWithOceanLayerRegistry = L.Map & {
