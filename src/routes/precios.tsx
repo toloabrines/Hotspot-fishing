@@ -6,6 +6,7 @@ import { StripeEmbeddedCheckout } from "@/components/StripeEmbeddedCheckout";
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { isPaymentsConfigured } from "@/lib/stripe";
 import { AiPacksSection } from "@/components/AiPacksSection";
+import { isNativeIos } from "@/lib/native-platform";
 
 export const Route = createFileRoute("/precios")({
   component: PricingPage,
@@ -34,26 +35,47 @@ function PricingPage() {
   const [checkoutPriceId, setCheckoutPriceId] = useState<string | null>(null);
 
   const configured = isPaymentsConfigured();
+  const iosNative = isNativeIos();
 
   return (
     <main className="min-h-screen bg-background">
-      <PaymentTestModeBanner />
+      {!iosNative && <PaymentTestModeBanner />}
       <div className="mx-auto max-w-5xl px-4 py-10">
         <header className="text-center">
           <h1 className="text-3xl font-bold text-foreground">Hotspot Fishing</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Cuatro módulos independientes. Contrata solo los que necesites — cada uno 5 €/mes, sin
-            permanencia.
-          </p>
-          <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary">
-            🎁 Prueba 7 días gratis al crear cuenta · sin tarjeta
-          </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Facturación por TOTYMAR · Hotspot Fishing
-          </p>
+          {iosNative ? (
+            <>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Las compras de módulos y créditos no están disponibles dentro de la app para iPhone.
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Puedes seguir usando el periodo de prueba y cualquier módulo que ya esté activo en tu cuenta.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Cuatro módulos independientes. Contrata solo los que necesites — cada uno 5 €/mes, sin
+                permanencia.
+              </p>
+              <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary">
+                🎁 Prueba 7 días gratis al crear cuenta · sin tarjeta
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Facturación por TOTYMAR · Hotspot Fishing
+              </p>
+            </>
+          )}
         </header>
 
-        {checkoutPriceId ? (
+        {iosNative ? (
+          <section className="mx-auto mt-8 max-w-xl rounded-xl border border-border bg-card p-5 text-center">
+            <p className="text-sm font-medium text-foreground">Compras desactivadas en iOS</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Esta versión de la app no inicia pagos de Stripe ni muestra el checkout en iPhone.
+            </p>
+          </section>
+        ) : checkoutPriceId ? (
           <section className="mt-8 rounded-xl border border-border bg-card p-4">
             <button
               type="button"
@@ -107,9 +129,7 @@ function PricingPage() {
           </div>
         )}
 
-        {!checkoutPriceId && <AiPacksSection />}
-
-
+        {!iosNative && !checkoutPriceId && <AiPacksSection />}
 
         <div className="mt-8 flex justify-center gap-4 text-[11px] text-muted-foreground">
           <Link to="/" className="hover:text-foreground">
@@ -126,4 +146,3 @@ function PricingPage() {
     </main>
   );
 }
-
