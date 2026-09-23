@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscriptions } from "@/hooks/use-subscriptions";
-import { FISHING_MODULES, MODULE_BY_PRICE_ID } from "@/lib/modules";
+import { FISHING_MODULES } from "@/lib/modules";
 import { createPortalSession } from "@/utils/payments.functions";
 import { getStripeEnvironment, isPaymentsConfigured } from "@/lib/stripe";
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
@@ -11,7 +11,8 @@ import { InviteAdminPanel } from "@/components/InviteAdminPanel";
 import { UsersAdminPanel } from "@/components/UsersAdminPanel";
 import { AiUsageAdminPanel } from "@/components/AiUsageAdminPanel";
 import { AiPacksSection } from "@/components/AiPacksSection";
-
+import { isNativeIos } from "@/lib/native-platform";
+import { deleteCurrentAccount } from "@/utils/account.functions";
 
 export const Route = createFileRoute("/cuenta")({
   component: AccountPage,
@@ -48,6 +49,9 @@ function AccountPage() {
   const [email, setEmail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const iosNative = isNativeIos();
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
@@ -77,6 +81,20 @@ function AccountPage() {
     navigate({ to: "/", replace: true });
   };
 
+  const deleteAccount = async () => {
+    setErr(null);
+    setDeleting(true);
+    try {
+      const result = await deleteCurrentAccount();
+      if ("error" in result) throw new Error(result.error);
+      await supabase.auth.signOut();
+      navigate({ to: "/", replace: true });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo eliminar la cuenta.");
+      setDeleting(false);
+    }
+  };
+
   if (!loading && !userId) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -98,7 +116,7 @@ function AccountPage() {
 
   return (
     <main className="min-h-screen bg-background">
-      <PaymentTestModeBanner />
+      {!iosNative && <PaymentTestModeBanner />}
       <div className="mx-auto max-w-3xl px-4 py-10">
         <h1 className="text-2xl font-bold text-foreground">Mi cuenta</h1>
         <p className="mt-1 text-xs text-muted-foreground">{email}</p>
@@ -127,12 +145,18 @@ function AccountPage() {
                       ? row?.cancel_at_period_end
                         ? `Activo hasta ${fmt(row.current_period_end ?? null)} (cancelación programada)`
                         : `Activo · renueva el ${fmt(row?.current_period_end ?? null)}`
-                      : "No contratado · 5 €/mes"}
+                      : iosNative
+                        ? "No contratado"
+                        : "No contratado · 5 €/mes"}
                   </p>
                 </div>
                 {active ? (
                   <span className="rounded-full bg-primary/15 px-2 py-1 text-[10px] font-semibold text-primary">
                     ACTIVO
+                  </span>
+                ) : iosNative ? (
+                  <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
+                    NO ACTIVO
                   </span>
                 ) : (
                   <Link
@@ -147,14 +171,13 @@ function AccountPage() {
           })}
         </section>
 
-        <AiPacksSection />
+        {!iosNative && <AiPacksSection />}
 
         <InviteRedeem grants={grants} onRedeemed={refresh} />
 
         {isAdmin && <InviteAdminPanel />}
         {isAdmin && <UsersAdminPanel />}
         {isAdmin && <AiUsageAdminPanel />}
-
 
         {err && (
           <p className="mt-4 rounded border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
@@ -163,14 +186,16 @@ function AccountPage() {
         )}
 
         <section className="mt-6 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={openPortal}
-            disabled={busy || !rows.length || !isPaymentsConfigured()}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50"
-          >
-            {busy ? "Abriendo…" : "Gestionar facturación y cancelaciones"}
-          </button>
+          {!iosNative && (
+            <button
+              type="button"
+              onClick={openPortal}
+              disabled={busy || !rows.length || !isPaymentsConfigured()}
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50"
+            >
+              {busy ? "Abriendo…" : "Gestionar facturación y cancelaciones"}
+            </button>
+          )}
           <button
             type="button"
             onClick={signOut}
@@ -180,22 +205,67 @@ function AccountPage() {
           </button>
         </section>
 
-        <p className="mt-4 text-[11px] text-muted-foreground">
-          El portal de facturación se abre en una pestaña nueva. Desde allí puedes cambiar la
-          tarjeta, descargar facturas y cancelar cualquier módulo; el acceso se mantiene hasta el
-          final del periodo pagado.
-        </p>
+        {!iosNative && (
+          <p className="mt-4 text-[11px] text-muted-foreground">
+            El portal de facturación se abre en una pestaña nueva. Desde allí puedes cambiar la
+            tarjeta, descargar facturas y cancelar cualquier módulo; el acceso se mantiene hasta el
+            final del periodo pagado.
+          </p>
+        )}
+
+        <section className="mt-8 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <h2 className="text-sm font-semibold text-foreground">Eliminar cuenta</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Elimina definitivamente tu cuenta de Hotspot Fishing. Si tienes una suscripción de Stripe
+            activa, se cancelará antes de borrar la cuenta para evitar cobros posteriores.
+          </p>
+
+          {!confirmDelete ? (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="mt-3 rounded-md border border-destructive/50 px-3 py-2 text-sm font-medium text-destructive"
+            >
+              Eliminar cuenta
+            </button>
+          ) : (
+            <div className="mt-3 rounded-md border border-destructive/40 bg-background p-3">
+              <p className="text-xs font-medium text-foreground">
+                Esta acción es definitiva y no se puede deshacer.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={deleteAccount}
+                  disabled={deleting}
+                  className="rounded-md bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground disabled:opacity-50"
+                >
+                  {deleting ? "Eliminando…" : "Sí, eliminar definitivamente"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
 
         <div className="mt-8 flex gap-4 text-[11px] text-muted-foreground">
           <Link to="/" className="hover:text-foreground">
             ← Volver al mapa
           </Link>
-          <Link to="/precios" className="hover:text-foreground">
-            Ver planes
-          </Link>
+          {!iosNative && (
+            <Link to="/precios" className="hover:text-foreground">
+              Ver planes
+            </Link>
+          )}
         </div>
       </div>
     </main>
   );
 }
-
