@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { App, type PluginListenerHandle } from "@capacitor/app";
+import { App } from "@capacitor/app";
+import type { PluginListenerHandle } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 import { supabase } from "../integrations/supabase/client";
 import { lovable } from "../integrations/lovable";
