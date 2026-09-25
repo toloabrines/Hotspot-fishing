@@ -334,6 +334,120 @@ export async function buildMbar24Tiles(
   }
 
   const latMid = (south + north) / 2;
+
+  // Ruta rápida para GeoTIFF que YA están en EPSG:4326 y aproximadamente a 16 m.
+  // Evita construir una segunda malla completa en memoria y remuestrear píxel a píxel,
+  // que en Safari/iPhone puede bloquear la pestaña incluso con ficheros pequeños.
+  //
+  // Es especialmente útil para batimetrías procedentes de sonda que ya hemos
+  // preparado previamente como una rejilla regular.
+  const srcResXM = Math.abs(rx) * 111320 * Math.cos((latMid * Math.PI) / 180);
+  const srcResYM = Math.abs(ry) * 110540;
+  const alreadyNative4326 =
+    isGeographic &&
+    srcEpsg === 4326 &&
+    rx > 0 &&
+    ry < 0 &&
+    srcResXM >= 12 &&
+    srcResXM <= 20 &&
+    srcResYM >= 12 &&
+    srcResYM <= 20;
+
+  if (alreadyNative4326) {
+    onProgress({
+      phase: "tiles",
+      pct: 20,
+      detail: `GeoTIFF ya preparado · ${srcWidth}×${srcHeight} · generando teselas sin remuestrear…`,
+    });
+
+    // Algunas sondas exportan "profundidad positiva" (p. ej. 14.2 m), mientras
+    // que el DEM de Hotspot usa elevación bajo el nivel del mar (p. ej. -14.2 m).
+    // Solo invertimos automáticamente cuando no hay valores negativos reales.
+    let validCount = 0;
+    let positiveCount = 0;
+    let negativeCount = 0;
+    for (let i = 0; i < src.length; i++) {
+      const v = src[i] as number;
+      if (!Number.isFinite(v) || v <= -9000 || v > 100 || v >= 1e6) continue;
+      validCount++;
+      if (v > 0.05) positiveCount++;
+      if (v < -0.05) negativeCount++;
+    }
+    const positiveDepthConvention =
+      validCount > 0 && positiveCount / validCount > 0.9 && negativeCount === 0;
+
+    const TS = MBAR24_TILE_SIZE;
+    const tilesX = Math.ceil(srcWidth / TS);
+    const tilesY = Math.ceil(srcHeight / TS);
+    const tiles: Mbar24BuiltTile[] = [];
+    let minElev = Infinity;
+    let maxElev = -Infinity;
+
+    for (let ty = 0; ty < tilesY; ty++) {
+      for (let tx = 0; tx < tilesX; tx++) {
+        const tile = new Int16Array(TS * TS).fill(MBAR24_NODATA);
+        let valid = 0;
+
+        for (let y = 0; y < TS; y++) {
+          const sy = ty * TS + y;
+          if (sy >= srcHeight) break;
+          for (let x = 0; x < TS; x++) {
+            const sx = tx * TS + x;
+            if (sx >= srcWidth) break;
+
+            let v = src[sy * srcWidth + sx] as number;
+            if (!Number.isFinite(v) || v <= -9000 || v > 100 || v >= 1e6) continue;
+            if (positiveDepthConvention) v = -Math.abs(v);
+
+            const dm = Math.round(v / MBAR24_SCALE);
+            if (dm <= MBAR24_NODATA || dm > 32767) continue;
+
+            tile[y * TS + x] = dm;
+            valid++;
+            if (v < minElev) minElev = v;
+            if (v > maxElev) maxElev = v;
+          }
+        }
+
+        if (valid > 0) {
+          tiles.push({ x: tx, y: ty, data: new Uint8Array(tile.buffer.slice(0)) });
+        }
+      }
+
+      onProgress({
+        phase: "tiles",
+        pct: 20 + Math.round(((ty + 1) / tilesY) * 72),
+        detail: `Teselas ${tiles.length} generadas sin remuestrear…`,
+      });
+      // Ceder el hilo en cada fila de teselas mantiene Safari/iPhone sensible.
+      await new Promise((res) => setTimeout(res, 0));
+    }
+
+    if (!Number.isFinite(minElev)) {
+      throw new Error("El fichero no contiene valores de profundidad válidos.");
+    }
+
+    return {
+      sheet: sheetId,
+      south,
+      west,
+      north,
+      east,
+      cols: srcWidth,
+      rows: srcHeight,
+      dLat: Math.abs(ry),
+      dLng: Math.abs(rx),
+      tilesX,
+      tilesY,
+      tiles,
+      minElev,
+      maxElev,
+      srcWidth,
+      srcHeight,
+      srcEpsg,
+    };
+  }
+
   const dLat = NATIVE_RES_M / 110540;
   const dLng = NATIVE_RES_M / (111320 * Math.cos((latMid * Math.PI) / 180));
   const cols = Math.max(1, Math.floor((east - west) / dLng));
