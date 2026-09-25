@@ -58,6 +58,9 @@ export interface Mbar24BuildResult {
   dLng: number;
   tilesX: number;
   tilesY: number;
+  /** Número total de teselas válidas generadas. */
+  tileCount: number;
+  /** Solo se rellena cuando no se proporciona onTile. */
   tiles: Mbar24BuiltTile[];
   minElev: number;
   maxElev: number;
@@ -293,6 +296,7 @@ export async function buildMbar24Tiles(
   file: File,
   sheetId: string,
   onProgress: (p: BuildProgress) => void,
+  onTile?: (tile: Mbar24BuiltTile) => Promise<void> | void,
 ): Promise<Mbar24BuildResult> {
   onProgress({ phase: "read", pct: 2, detail: "Abriendo GeoTIFF…" });
   const tiff = await fromBlob(file);
@@ -380,6 +384,7 @@ export async function buildMbar24Tiles(
     const tilesX = Math.ceil(srcWidth / TS);
     const tilesY = Math.ceil(srcHeight / TS);
     const tiles: Mbar24BuiltTile[] = [];
+    let tileCount = 0;
     let minElev = Infinity;
     let maxElev = -Infinity;
 
@@ -410,14 +415,23 @@ export async function buildMbar24Tiles(
         }
 
         if (valid > 0) {
-          tiles.push({ x: tx, y: ty, data: new Uint8Array(tile.buffer.slice(0)) });
+          const builtTile = { x: tx, y: ty, data: new Uint8Array(tile.buffer.slice(0)) };
+          tileCount++;
+          if (onTile) {
+            await onTile(builtTile);
+          } else {
+            tiles.push(builtTile);
+          }
+          // En iPhone/Safari es importante liberar el hilo y permitir que se
+          // recoja la memoria de cada tesela antes de construir la siguiente.
+          await new Promise((res) => setTimeout(res, 0));
         }
       }
 
       onProgress({
         phase: "tiles",
         pct: 20 + Math.round(((ty + 1) / tilesY) * 72),
-        detail: `Teselas ${tiles.length} generadas sin remuestrear…`,
+        detail: `Teselas ${tileCount} procesadas sin remuestrear…`,
       });
       // Ceder el hilo en cada fila de teselas mantiene Safari/iPhone sensible.
       await new Promise((res) => setTimeout(res, 0));
@@ -439,6 +453,7 @@ export async function buildMbar24Tiles(
       dLng: Math.abs(rx),
       tilesX,
       tilesY,
+      tileCount,
       tiles,
       minElev,
       maxElev,
@@ -528,6 +543,7 @@ export async function buildMbar24Tiles(
   const tilesX = Math.ceil(cols / TS);
   const tilesY = Math.ceil(rows / TS);
   const tiles: Mbar24BuiltTile[] = [];
+  let tileCount = 0;
   onProgress({ phase: "tiles", pct: 72, detail: `Generando ${tilesX * tilesY} teselas…` });
 
   for (let ty = 0; ty < tilesY; ty++) {
@@ -547,12 +563,19 @@ export async function buildMbar24Tiles(
         }
       }
       if (valid === 0) continue; // tesela vacía: no se publica
-      tiles.push({ x: tx, y: ty, data: new Uint8Array(tile.buffer.slice(0)) });
+      const builtTile = { x: tx, y: ty, data: new Uint8Array(tile.buffer.slice(0)) };
+      tileCount++;
+      if (onTile) {
+        await onTile(builtTile);
+      } else {
+        tiles.push(builtTile);
+      }
+      await new Promise((res) => setTimeout(res, 0));
     }
     onProgress({
       phase: "tiles",
       pct: 72 + Math.round(((ty + 1) / tilesY) * 20),
-      detail: `Teselas ${tiles.length} generadas…`,
+      detail: `Teselas ${tileCount} procesadas…`,
     });
     await new Promise((res) => setTimeout(res, 0));
   }
@@ -569,6 +592,7 @@ export async function buildMbar24Tiles(
     dLng,
     tilesX,
     tilesY,
+    tileCount,
     tiles,
     minElev,
     maxElev,
