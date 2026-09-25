@@ -45,8 +45,6 @@ export const Route = createFileRoute("/mbar24")({
 const PROVIDER = "Instituto Hidrográfico de la Marina (IHM), Armada Española";
 const LICENSE = "CC-BY-NC 4.0";
 const ATTRIBUTION = "MBAR24 2024 CC-BY-NC 4.0 ihm.es — Instituto Hidrográfico de la Marina";
-const BATCH = 4;
-
 type PhaseKey = "idle" | "validate" | "read" | "grid" | "tiles" | "upload" | "publish" | "done";
 
 const PHASE_LABEL: Record<PhaseKey, string> = {
@@ -238,26 +236,45 @@ function Mbar24AdminPage() {
     setDone(null);
     setPct(0);
     try {
-      const built = await buildMbar24Tiles(file, id, (p) => {
-        setPct(p.pct);
-        setDetail(p.detail);
-        setPhase(p.phase);
-      });
+      // En iPhone no retenemos todas las teselas en memoria: se suben en
+      // micro-lotes de dos a medida que se generan.
+      let pendingTiles: Array<{ x: number; y: number; b64: string }> = [];
+      let uploadedTiles = 0;
 
-      const total = built.tiles.length;
-      if (total === 0) throw new Error("La hoja no ha producido ninguna tesela con datos.");
-
-      setPhase("upload");
-      for (let i = 0; i < total; i += BATCH) {
-        const chunk = built.tiles.slice(i, i + BATCH).map((t) => ({
-          x: t.x,
-          y: t.y,
-          b64: toBase64(t.data),
-        }));
+      const flushPending = async () => {
+        if (pendingTiles.length === 0) return;
+        const chunk = pendingTiles;
+        pendingTiles = [];
+        setPhase("upload");
+        setDetail(`Subiendo teselas… ${uploadedTiles + 1}–${uploadedTiles + chunk.length}`);
         await upload({ data: { sheet: id, tiles: chunk } });
-        setPct(92 + Math.round(((i + chunk.length) / total) * 7));
-        setDetail(`Subiendo teselas ${Math.min(i + BATCH, total)}/${total}…`);
-      }
+        uploadedTiles += chunk.length;
+        // Ceder el hilo ayuda a Safari a liberar los ArrayBuffer ya enviados.
+        await new Promise((res) => setTimeout(res, 0));
+      };
+
+      const built = await buildMbar24Tiles(
+        file,
+        id,
+        (p) => {
+          setPct(p.pct);
+          setDetail(p.detail);
+          setPhase(p.phase);
+        },
+        async (tile) => {
+          pendingTiles.push({
+            x: tile.x,
+            y: tile.y,
+            b64: toBase64(tile.data),
+          });
+          if (pendingTiles.length >= 2) await flushPending();
+        },
+      );
+
+      await flushPending();
+
+      const total = built.tileCount;
+      if (total === 0) throw new Error("La hoja no ha producido ninguna tesela con datos.");
 
       const meta: Mbar24SheetIndex = {
         sheet: id,
