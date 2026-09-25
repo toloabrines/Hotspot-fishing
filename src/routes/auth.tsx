@@ -131,6 +131,23 @@ function AuthPage() {
     }
   };
 
+  const handleApple = async () => {
+    setErr(null);
+    setLoading(true);
+    try {
+      const result = await lovable.auth.signInWithOAuth("apple", {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) {
+        setErr(result.error.message || "Error al iniciar sesión con Apple");
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-lg">
@@ -146,9 +163,19 @@ function AuthPage() {
 
         <button
           type="button"
+          onClick={handleApple}
+          disabled={loading}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-md border border-border bg-foreground px-3 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          <span aria-hidden="true" className="text-base leading-none"></span>
+          Continuar con Apple
+        </button>
+
+        <button
+          type="button"
           onClick={handleGoogle}
           disabled={loading}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
         >
           <svg className="h-4 w-4" viewBox="0 0 48 48" aria-hidden="true">
             <path
