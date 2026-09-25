@@ -1,7 +1,10 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { App, type PluginListenerHandle } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 import { supabase } from "../integrations/supabase/client";
 import { lovable } from "../integrations/lovable";
+import { isNativeIos } from "@/lib/native-platform";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -35,6 +38,57 @@ function AuthPage() {
       if (session) navigate({ to: "/" });
     });
     return () => sub.subscription.unsubscribe();
+  }, [navigate]);
+
+  // En iOS el OAuth vuelve a la app mediante un esquema propio.
+  // Así Google se muestra dentro de Safari View Controller y no en Safari externo.
+  useEffect(() => {
+    if (!isNativeIos()) return;
+
+    let handle: PluginListenerHandle | undefined;
+    let cancelled = false;
+
+    App.addListener("appUrlOpen", async ({ url }) => {
+      if (!url.startsWith("hotspotfishing://auth/callback")) return;
+
+      try {
+        await Browser.close();
+      } catch {
+        // Puede estar ya cerrado; no es un error para el usuario.
+      }
+
+      const parsed = new URL(url);
+      const params = new URLSearchParams(parsed.hash.replace(/^#/, ""));
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+
+      if (!accessToken || !refreshToken) {
+        if (!cancelled) setErr("No se pudo completar el acceso con Google. Inténtalo de nuevo.");
+        return;
+      }
+
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (error) {
+        if (!cancelled) setErr(translateError(error.message));
+        return;
+      }
+
+      if (!cancelled) navigate({ to: "/", replace: true });
+    }).then((listener) => {
+      if (cancelled) {
+        listener.remove();
+      } else {
+        handle = listener;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      handle?.remove();
+    };
   }, [navigate]);
 
   const translateError = (message: string): string => {
@@ -118,6 +172,24 @@ function AuthPage() {
     setErr(null);
     setLoading(true);
     try {
+      if (isNativeIos()) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: `${window.location.origin}/auth-native-callback`,
+            skipBrowserRedirect: true,
+          },
+        });
+        if (error) throw error;
+        if (!data.url) throw new Error("No se pudo iniciar el acceso con Google.");
+
+        await Browser.open({
+          url: data.url,
+          presentationStyle: "popover",
+        });
+        return;
+      }
+
       const result = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin,
       });
