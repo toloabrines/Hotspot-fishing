@@ -22,6 +22,7 @@ import {
 import { buildPlan } from "../lib/ai-plan";
 import { toDegMinSec } from "./FishingHotspots.types";
 import AiPhotoAnalyzer from "./AiPhotoAnalyzer";
+import { isNativeIos } from "../lib/native-platform";
 
 
 interface Props {
@@ -536,7 +537,7 @@ export default function AiFishingChat({
           : ""}
       </p>
 
-      {usage && !usage.unlimited && usage.rateLimited && usage.credits <= 0 && (
+      {!isNativeIos() && usage && !usage.unlimited && usage.rateLimited && usage.credits <= 0 && (
         <a
           href="/precios#packs-ia"
           className="mt-2 block rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-center text-[11px] font-semibold text-primary"
@@ -547,4 +548,3 @@ export default function AiFishingChat({
     </div>
   );
 }
-

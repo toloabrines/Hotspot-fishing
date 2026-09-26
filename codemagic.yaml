@@ -260,7 +260,7 @@ workflows:
                       "keywords": "fishing,bathymetry,chlorophyll,temperature,currents,hotspots,ocean,maps,navigation",
                       "marketingUrl": "https://totymar.com/",
                       "promotionalText": "Find promising fishing hotspots with sea temperature, chlorophyll, current and bathymetry maps.",
-                      "supportUrl": "https://hotspotfishing.app/support"
+                      "supportUrl": "https://hotspot-fishing.lovable.app/support"
                   }
               }
           })
@@ -361,4 +361,3 @@ workflows:
           print("TESTFLIGHT_STATUS=" + json.dumps(result, ensure_ascii=False))
           print("TESTFLIGHT_BUILD_FOUND=" + ("true" if builds else "false"))
           PY
-
