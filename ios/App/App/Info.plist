@@ -8,6 +8,17 @@
 	<string>Hotspot Fishing</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Hotspot Fishing usa tu ubicación para centrar el mapa marino y mostrar los hotspots de pesca cercanos.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>app.lovable.hotspotfishing.auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>hotspotfishing</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
