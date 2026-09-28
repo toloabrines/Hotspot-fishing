@@ -5,7 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@capgo/native-purchases@7.19.3': 8da4cd65cfd760a79890fe854c0739c3fcdfeef75c484befcb9b9fc7d3be327a
+  '@capgo/native-purchases@7.19.3':
+    hash: 8da4cd65cfd760a79890fe854c0739c3fcdfeef75c484befcb9b9fc7d3be327a
+    path: patches/@capgo__native-purchases@7.19.3.patch
 
 importers:
 
