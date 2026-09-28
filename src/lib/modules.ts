@@ -41,6 +41,7 @@ export function hasAnyFreeAccess(email?: string | null): boolean {
 export interface FishingModule {
   id: ModuleId;
   priceId: string;
+  appStoreProductId: string;
   name: string;
   tagline: string;
   emoji: string;
@@ -48,11 +49,12 @@ export interface FishingModule {
   priceLabel: string;
 }
 
-/** Catálogo de los tres módulos independientes de 5 €/mes. */
+/** Catálogo de los cuatro módulos independientes de suscripción. */
 export const FISHING_MODULES: FishingModule[] = [
   {
     id: "superficie",
     priceId: "superficie_monthly",
+    appStoreProductId: "app.lovable.hotspotfishing.superficie.monthly",
     name: "Pesca de Superficie",
     tagline: "Pelágicos, frentes térmicos y corrientes",
     emoji: "🌊",
@@ -67,6 +69,7 @@ export const FISHING_MODULES: FishingModule[] = [
   {
     id: "fondo",
     priceId: "fondo_monthly",
+    appStoreProductId: "app.lovable.hotspotfishing.fondo.monthly",
     name: "Pesca de Fondo",
     tagline: "Batimetría, veriles y relieve 3D",
     emoji: "⚓",
@@ -81,6 +84,7 @@ export const FISHING_MODULES: FishingModule[] = [
   {
     id: "calamar",
     priceId: "calamar_monthly",
+    appStoreProductId: "app.lovable.hotspotfishing.calamar.monthly",
     name: "Calamar",
     tagline: "Motor dedicado con luz lunar y crepúsculos",
     emoji: "🦑",
@@ -95,6 +99,7 @@ export const FISHING_MODULES: FishingModule[] = [
   {
     id: "deriva",
     priceId: "deriva_monthly",
+    appStoreProductId: "app.lovable.hotspotfishing.deriva.monthly",
     name: "Pesca a la Deriva (Fluixa)",
     tagline: "Bahías y costa: deriva natural sobre depredadores",
     emoji: "🚤",
@@ -115,4 +120,3 @@ export const MODULE_BY_PRICE_ID: Record<string, FishingModule> = Object.fromEntr
 export function moduleById(id: ModuleId): FishingModule {
   return FISHING_MODULES.find((m) => m.id === id)!;
 }
-

@@ -12,6 +12,7 @@ import { UsersAdminPanel } from "@/components/UsersAdminPanel";
 import { AiUsageAdminPanel } from "@/components/AiUsageAdminPanel";
 import { AiPacksSection } from "@/components/AiPacksSection";
 import { isNativeIos } from "@/lib/native-platform";
+import { NativePurchases } from "@capgo/native-purchases";
 import { deleteCurrentAccount } from "@/utils/account.functions";
 
 export const Route = createFileRoute("/cuenta")({
@@ -45,7 +46,18 @@ function fmt(date: string | null) {
 
 function AccountPage() {
   const navigate = useNavigate();
-  const { userId, rows, grants, loading, hasModule, isAdmin, isTrialActive, trialExpiresAt, refresh } = useSubscriptions();
+  const {
+    userId,
+    rows,
+    grants,
+    loading,
+    hasModule,
+    isAdmin,
+    isTrialActive,
+    trialExpiresAt,
+    refresh,
+    storeProductIds,
+  } = useSubscriptions();
   const [email, setEmail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -130,6 +142,7 @@ function AccountPage() {
           <h2 className="text-sm font-semibold text-foreground">Módulos</h2>
           {FISHING_MODULES.map((mod) => {
             const row = rows.find((r) => r.price_id === mod.priceId);
+            const appStoreActive = storeProductIds.includes(mod.appStoreProductId);
             const active = hasModule(mod.id);
             return (
               <div
@@ -144,7 +157,11 @@ function AccountPage() {
                     {active
                       ? row?.cancel_at_period_end
                         ? `Activo hasta ${fmt(row.current_period_end ?? null)} (cancelación programada)`
-                        : `Activo · renueva el ${fmt(row?.current_period_end ?? null)}`
+                        : row
+                          ? `Activo · renueva el ${fmt(row.current_period_end ?? null)}`
+                          : appStoreActive
+                            ? "Suscripción de Apple activa"
+                            : "Activo por prueba o acceso concedido"
                       : iosNative
                         ? "No contratado"
                         : "No contratado · 5 €/mes"}
@@ -186,6 +203,19 @@ function AccountPage() {
         )}
 
         <section className="mt-6 flex flex-wrap gap-3">
+          {iosNative && (
+            <button
+              type="button"
+              onClick={() =>
+                void NativePurchases.manageSubscriptions().catch(() =>
+                  setErr("No se pudieron abrir los ajustes de suscripción de Apple."),
+                )
+              }
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+            >
+              Gestionar suscripciones de Apple
+            </button>
+          )}
           {!iosNative && (
             <button
               type="button"
@@ -216,8 +246,8 @@ function AccountPage() {
         <section className="mt-8 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
           <h2 className="text-sm font-semibold text-foreground">Eliminar cuenta</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Elimina definitivamente tu cuenta de Hotspot Fishing. Si tienes una suscripción de Stripe
-            activa, se cancelará antes de borrar la cuenta para evitar cobros posteriores.
+            Elimina definitivamente tu cuenta de Hotspot Fishing. Si tienes una suscripción de
+            Stripe activa, se cancelará antes de borrar la cuenta para evitar cobros posteriores.
           </p>
 
           {!confirmDelete ? (

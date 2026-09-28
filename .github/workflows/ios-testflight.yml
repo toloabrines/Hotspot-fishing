@@ -11,7 +11,7 @@ on:
       - "ios-config/**"
       - "capacitor.config.ts"
       - "package.json"
-      - "package-lock.json"
+      - "pnpm-lock.yaml"
       - "Gemfile"
       - "Gemfile.lock"
       - "fastlane/**"
@@ -33,7 +33,7 @@ on:
       - "ios-config/**"
       - "capacitor.config.ts"
       - "package.json"
-      - "package-lock.json"
+      - "pnpm-lock.yaml"
       - "Gemfile"
       - "Gemfile.lock"
       - "fastlane/**"
@@ -111,10 +111,12 @@ jobs:
         shell: bash
         run: |
           set -e
-          npm install --ignore-scripts
+          corepack enable
+          corepack prepare pnpm@10.15.1 --activate
+          pnpm install --frozen-lockfile
           mkdir -p dist
           echo '<html><body>Loading...</body></html>' > dist/index.html
-          npx --no-install cap sync ios
+          pnpm exec cap sync ios
           gem install cocoapods --no-document
           cd ios/App
           pod install --repo-update

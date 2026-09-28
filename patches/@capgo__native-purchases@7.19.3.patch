@@ -1,0 +1,33 @@
+diff --git a/ios/Sources/NativePurchasesPlugin/NativePurchasesPlugin.swift b/ios/Sources/NativePurchasesPlugin/NativePurchasesPlugin.swift
+index 8a1af2d21ed0844881a2093f8fc3ad9849eb4a42..b79c6fdc9d5991758d3ddd30fce23497a8f3414a 100644
+--- a/ios/Sources/NativePurchasesPlugin/NativePurchasesPlugin.swift
++++ b/ios/Sources/NativePurchasesPlugin/NativePurchasesPlugin.swift
+@@ -41,6 +41,9 @@ public class NativePurchasesPlugin: CAPPlugin, CAPBridgedPlugin {
+ 
+     private func startTransactionUpdatesListener() {
+         transactionUpdatesTask?.cancel()
++        let deliverEvent: @MainActor (String, [String: Any]) -> Void = { [weak self] name, data in
++            self?.notifyListeners(name, data: data)
++        }
+         transactionUpdatesTask = Task.detached { [weak self] in
+             for await result in Transaction.updates {
+                 guard !Task.isCancelled else { break }
+@@ -53,16 +56,12 @@ public class NativePurchasesPlugin: CAPPlugin, CAPBridgedPlugin {
+                     )
+                     await transaction.finish()
+                     try? await Task.sleep(nanoseconds: 500_000_000)
+-                    await MainActor.run {
+-                        self?.notifyListeners("transactionUpdated", data: payload)
+-                    }
++                    await deliverEvent("transactionUpdated", payload)
+                 case .unverified(let transaction, let error):
+-                    await MainActor.run {
+-                        self?.notifyListeners("transactionVerificationFailed", data: [
++                    await deliverEvent("transactionVerificationFailed", [
+                             "transactionId": String(transaction.id),
+                             "error": error.localizedDescription
+                         ])
+-                    }
+                 }
+             }
+         }

@@ -176,7 +176,7 @@ function LockedRow({
       to="/precios"
       onClick={onClose}
       className="flex items-center gap-2 rounded-lg border border-border bg-card/30 px-2.5 py-2 opacity-70 transition-colors hover:bg-secondary/60"
-      title="Módulo no contratado · 5 €/mes"
+      title="Módulo no contratado · ver suscripciones"
     >
       <span className="text-[11px] font-bold">{icon}</span>
       <span className="flex-1">
@@ -359,7 +359,7 @@ export function AppMenu(props: AppMenuProps) {
                 } ${unlocked ? "" : "opacity-60"}`;
                 if (!unlocked) {
                   return (
-                    <Link key={m.id} to="/precios" onClick={onClose} className={cls} title="Módulo no contratado · 5 €/mes">
+                    <Link key={m.id} to="/precios" onClick={onClose} className={cls} title="Módulo no contratado · ver suscripciones">
                       <span className="text-base">{m.emoji}</span>
                       <span>{m.label}</span>
                       <span className="absolute right-1 top-1 text-[10px]">🔒</span>
@@ -651,7 +651,7 @@ export function AppMenu(props: AppMenuProps) {
               <LockedRow
                 icon="FSLE"
                 label="FSLE · Líneas de convergencia"
-                hint="Incluido en Pesca de Superficie · 5 €/mes"
+                hint="Incluido en Pesca de Superficie"
                 onClose={onClose}
               />
             )}
@@ -688,7 +688,7 @@ export function AppMenu(props: AppMenuProps) {
                 <LockedRow
                   icon="🗺"
                   label="Fondo marino profesional"
-                  hint="Incluido en Pesca de Fondo · 5 €/mes"
+                  hint="Incluido en Pesca de Fondo"
                   onClose={onClose}
                 />
               )}
@@ -723,7 +723,7 @@ export function AppMenu(props: AppMenuProps) {
               <LockedRow
                 icon="△"
                 label="Dibujar triángulo"
-                hint="Requiere un módulo activo · 5 €/mes"
+                  hint="Requiere un módulo activo"
                 onClose={onClose}
               />
             )}
@@ -902,4 +902,3 @@ export function AppMenu(props: AppMenuProps) {
     </>
   );
 }
-

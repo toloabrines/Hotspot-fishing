@@ -67,7 +67,7 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
   ios-testflight:
-    name: iOS — Crear IPA firmada (sin subir)
+    name: iOS — Subir y enviar a revisión App Store
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -83,6 +83,9 @@ workflows:
       node: 22
       xcode: 26.4
       cocoapods: default
+
+    integrations:
+      app_store_connect: codemagic_hotspot_2026
 
     cache:
       cache_paths:
@@ -144,6 +147,13 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_app_store: true
+        cancel_previous_submissions: true
+        release_type: MANUAL
   ios-signing-info:
     name: iOS — Comprobar firma de Apple
     max_build_duration: 15
@@ -260,7 +270,7 @@ workflows:
                       "keywords": "fishing,bathymetry,chlorophyll,temperature,currents,hotspots,ocean,maps,navigation",
                       "marketingUrl": "https://totymar.com/",
                       "promotionalText": "Find promising fishing hotspots with sea temperature, chlorophyll, current and bathymetry maps.",
-                      "supportUrl": "https://hotspotfishing.app/support"
+                      "supportUrl": "https://hotspot-fishing.lovable.app/support"
                   }
               }
           })
@@ -361,4 +371,3 @@ workflows:
           print("TESTFLIGHT_STATUS=" + json.dumps(result, ensure_ascii=False))
           print("TESTFLIGHT_BUILD_FOUND=" + ("true" if builds else "false"))
           PY
-
