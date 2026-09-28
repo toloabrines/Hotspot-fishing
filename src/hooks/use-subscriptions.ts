@@ -10,6 +10,8 @@ import {
   hasAnyFreeAccess,
   type ModuleId,
 } from "@/lib/modules";
+import { NativePurchases, PURCHASE_TYPE } from "@capgo/native-purchases";
+import { isNativeIos } from "@/lib/native-platform";
 
 export interface InviteGrantRow {
   id: string;
@@ -40,6 +42,30 @@ export function useSubscriptions() {
   const [rows, setRows] = useState<SubscriptionRow[]>([]);
   const [grants, setGrants] = useState<InviteGrantRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [storeProductIds, setStoreProductIds] = useState<string[]>([]);
+  const [storeLoading, setStoreLoading] = useState(isNativeIos());
+
+  const refreshStorePurchases = useCallback(async () => {
+    if (!isNativeIos()) {
+      setStoreProductIds([]);
+      setStoreLoading(false);
+      return;
+    }
+    setStoreLoading(true);
+    try {
+      const { purchases } = await NativePurchases.getPurchases({ productType: PURCHASE_TYPE.SUBS });
+      setStoreProductIds(
+        purchases
+          .filter((purchase) => purchase.isActive === true)
+          .map((purchase) => purchase.productIdentifier),
+      );
+    } catch (error) {
+      console.warn("No se pudieron consultar las suscripciones de App Store", error);
+      setStoreProductIds([]);
+    } finally {
+      setStoreLoading(false);
+    }
+  }, []);
 
   const trialGrant = grants.find((g) => g.code === TRIAL_CODE);
   const trialExpiresAt = trialGrant?.expires_at ?? null;
@@ -95,6 +121,10 @@ export function useSubscriptions() {
   }, [refresh]);
 
   useEffect(() => {
+    void refreshStorePurchases();
+  }, [refreshStorePurchases]);
+
+  useEffect(() => {
     if (!userId) return;
     // Nombre único por instancia del hook: varios componentes lo usan a la vez
     // y reutilizar el mismo nombre de canal rompe realtime.
@@ -120,20 +150,25 @@ export function useSubscriptions() {
     if (MODULES_UNLOCKED || isAdminEmail(email) || hasFreeAccess(email, id)) return true;
     if (grantedModules.has(id)) return true;
     const mod = FISHING_MODULES.find((m) => m.id === id);
-    return mod ? activePriceIds.has(mod.priceId) : false;
+    return mod
+      ? activePriceIds.has(mod.priceId) || storeProductIds.includes(mod.appStoreProductId)
+      : false;
   };
 
   return {
     userId,
     rows,
     grants,
-    loading,
+    loading: loading || storeLoading,
+    storeProductIds,
+    refreshStorePurchases,
     hasModule,
     isAdmin: isAdminEmail(email),
     isTrialActive,
     trialExpiresAt,
     hasAny:
       activePriceIds.size > 0 ||
+      storeProductIds.length > 0 ||
       grantedModules.size > 0 ||
       isAdminEmail(email) ||
       hasAnyFreeAccess(email) ||
@@ -141,4 +176,3 @@ export function useSubscriptions() {
     refresh: () => refresh(userId),
   };
 }
-
