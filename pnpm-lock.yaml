@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@capgo/native-purchases@7.19.3': 8da4cd65cfd760a79890fe854c0739c3fcdfeef75c484befcb9b9fc7d3be327a
+
 importers:
 
   .:
@@ -43,7 +46,7 @@ importers:
         version: 7.0.4(@capacitor/core@7.6.6)
       '@capgo/native-purchases':
         specifier: 7.19.3
-        version: 7.19.3(@capacitor/core@7.6.6)
+        version: 7.19.3(patch_hash=8da4cd65cfd760a79890fe854c0739c3fcdfeef75c484befcb9b9fc7d3be327a)(@capacitor/core@7.6.6)
       '@cloudflare/vite-plugin':
         specifier: ^1.25.5
         version: 1.54.4(vite@7.3.6(@types/node@20.19.11)(jiti@2.7.0)(lightningcss@1.33.0))(wrangler@4.129.0)
@@ -5032,7 +5035,7 @@ snapshots:
 
   '@capacitor/synapse@1.0.4': {}
 
-  '@capgo/native-purchases@7.19.3(@capacitor/core@7.6.6)':
+  '@capgo/native-purchases@7.19.3(patch_hash=8da4cd65cfd760a79890fe854c0739c3fcdfeef75c484befcb9b9fc7d3be327a)(@capacitor/core@7.6.6)':
     dependencies:
       '@capacitor/core': 7.6.6
 
