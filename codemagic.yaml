@@ -67,7 +67,7 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
   ios-testflight:
-    name: iOS — Crear IPA firmada (sin subir)
+    name: iOS — Subir y enviar a revisión App Store
     max_build_duration: 90
     instance_type: mac_mini_m2
 
