@@ -1,8 +1,8 @@
 # Hotspot Fishing — Codemagic iOS
 #
-# Todos los flujos son manuales. Ninguno publica en App Store Connect.
+# Todos los flujos son manuales. La subida a App Store Connect no envía a revisión ni publica.
 # 1) ios-validate comprueba que la app compila sin firma ni credenciales de Apple.
-# 2) ios-testflight crea una IPA firmada y la deja como artefacto para revisión.
+# 2) ios-testflight crea una IPA firmada y la sube a App Store Connect, sin revisión ni publicación.
 # 3) ios-signing-info consulta los identificadores de firma.
 # 4) ios-create-profile crea el perfil App Store vinculado al certificado nuevo.
 #
@@ -67,7 +67,7 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
   ios-testflight:
-    name: iOS — Subir y enviar a revisión App Store
+    name: iOS — Subir a TestFlight sin enviar a revisión
     max_build_duration: 90
     instance_type: mac_mini_m2
 
@@ -93,18 +93,16 @@ workflows:
         - $HOME/Library/Caches/pnpm
 
     scripts:
-      - name: Preparar icono obligatorio de iOS sin transparencia
+      - name: Validar icono definitivo de iOS
         script: |
           set -euxo pipefail
-          ICON_SOURCE="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-          ICON_DEST="ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
-          ICON_TMP_JPG="/tmp/hotspot-app-icon.jpg"
-          test -f "$ICON_SOURCE"
-          sips -s format jpeg -s formatOptions 100 -z 1024 1024 "$ICON_SOURCE" --out "$ICON_TMP_JPG"
-          sips -s format png "$ICON_TMP_JPG" --out "$ICON_DEST"
-          test -s "$ICON_DEST"
-          if sips -g hasAlpha "$ICON_DEST" | grep -q "hasAlpha: yes"; then
-            echo "El icono iOS todavía contiene transparencia"
+          ICON_PATH="ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
+          test -s "$ICON_PATH"
+          sips -g pixelWidth -g pixelHeight -g hasAlpha "$ICON_PATH"
+          test "$(sips -g pixelWidth "$ICON_PATH" | awk '/pixelWidth:/ {print $2}')" = "1024"
+          test "$(sips -g pixelHeight "$ICON_PATH" | awk '/pixelHeight:/ {print $2}')" = "1024"
+          if sips -g hasAlpha "$ICON_PATH" | grep -q "hasAlpha: yes"; then
+            echo "El icono iOS contiene transparencia"
             exit 1
           fi
 
@@ -151,9 +149,8 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_app_store: true
-        cancel_previous_submissions: true
-        release_type: MANUAL
+        submit_to_testflight: false
+        submit_to_app_store: false
   ios-signing-info:
     name: iOS — Comprobar firma de Apple
     max_build_duration: 15
