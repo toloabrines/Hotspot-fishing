@@ -151,8 +151,6 @@ workflows:
         auth: integration
         submit_to_testflight: false
         submit_to_app_store: false
-        cancel_previous_submissions: false
-        release_type: MANUAL
   ios-signing-info:
     name: iOS — Comprobar firma de Apple
     max_build_duration: 15
