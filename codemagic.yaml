@@ -1,12 +1,12 @@
 # Hotspot Fishing — Codemagic iOS
 #
-# Todos los flujos son manuales. Ninguno publica en App Store Connect.
+# Todos los flujos son manuales. Ninguno publica en la App Store.
 # 1) ios-validate comprueba que la app compila sin firma ni credenciales de Apple.
-# 2) ios-testflight crea una IPA firmada y la deja como artefacto para revisión.
+# 2) ios-testflight crea una IPA firmada y la sube a TestFlight, sin enviar a revisión de App Store.
 # 3) ios-signing-info consulta los identificadores de firma.
 # 4) ios-create-profile crea el perfil App Store vinculado al certificado nuevo.
 #
-# La subida a TestFlight se activará únicamente con autorización expresa.
+# La subida a TestFlight está autorizada para corregir el rechazo de iOS 1.0 (4).
 
 workflows:
   ios-validate:
@@ -67,12 +67,13 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
   ios-testflight:
-    name: iOS — Crear IPA firmada (sin subir)
+    name: iOS — Subir corrección a TestFlight (sin publicar)
     max_build_duration: 90
     instance_type: mac_mini_m2
 
     environment:
       vars:
+        APP_STORE_APPLE_ID: "6771454287"
         BUNDLE_ID: "app.lovable.hotspotfishing"
         XCODE_WORKSPACE: "App.xcworkspace"
         XCODE_SCHEME: "App"
@@ -83,6 +84,9 @@ workflows:
       node: 22
       xcode: 26.4
       cocoapods: default
+
+    integrations:
+      app_store_connect: codemagic_hotspot_2026
 
     cache:
       cache_paths:
@@ -131,6 +135,17 @@ workflows:
           set -euxo pipefail
           xcode-project use-profiles
 
+      - name: Incrementar número de compilación
+        script: |
+          set -euo pipefail
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID")
+          if ! [[ "$LATEST_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "No se pudo consultar el último número de TestFlight"
+            exit 1
+          fi
+          cd ios/App
+          agvtool new-version -all "$((LATEST_BUILD_NUMBER + 1))"
+
       - name: Crear IPA firmada
         script: |
           set -euxo pipefail
@@ -143,6 +158,12 @@ workflows:
       - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
 
   ios-signing-info:
     name: iOS — Comprobar firma de Apple
