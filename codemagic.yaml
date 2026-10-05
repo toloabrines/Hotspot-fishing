@@ -97,7 +97,7 @@ workflows:
       - name: Preparar icono obligatorio de iOS sin transparencia
         script: |
           set -euxo pipefail
-          ICON_SOURCE="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+          ICON_SOURCE="resources/icon.png"
           ICON_DEST="ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
           ICON_TMP_JPG="/tmp/hotspot-app-icon.jpg"
           test -f "$ICON_SOURCE"
