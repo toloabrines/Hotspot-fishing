@@ -1,7 +1,11 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { App } from "@capacitor/app";
+import type { PluginListenerHandle } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
 import { supabase } from "../integrations/supabase/client";
 import { lovable } from "../integrations/lovable";
+import { isNativeIos } from "@/lib/native-platform";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -35,6 +39,57 @@ function AuthPage() {
       if (session) navigate({ to: "/" });
     });
     return () => sub.subscription.unsubscribe();
+  }, [navigate]);
+
+  // En iOS el OAuth vuelve a la app mediante un esquema propio.
+  // Así Google se muestra dentro de Safari View Controller y no en Safari externo.
+  useEffect(() => {
+    if (!isNativeIos()) return;
+
+    let handle: PluginListenerHandle | undefined;
+    let cancelled = false;
+
+    App.addListener("appUrlOpen", async ({ url }) => {
+      if (!url.startsWith("hotspotfishing://auth/callback")) return;
+
+      try {
+        await Browser.close();
+      } catch {
+        // Puede estar ya cerrado; no es un error para el usuario.
+      }
+
+      const parsed = new URL(url);
+      const params = new URLSearchParams(parsed.hash.replace(/^#/, ""));
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+
+      if (!accessToken || !refreshToken) {
+        if (!cancelled) setErr("No se pudo completar el acceso con Google. Inténtalo de nuevo.");
+        return;
+      }
+
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (error) {
+        if (!cancelled) setErr(translateError(error.message));
+        return;
+      }
+
+      if (!cancelled) navigate({ to: "/", replace: true });
+    }).then((listener) => {
+      if (cancelled) {
+        listener.remove();
+      } else {
+        handle = listener;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      handle?.remove();
+    };
   }, [navigate]);
 
   const translateError = (message: string): string => {
@@ -118,11 +173,46 @@ function AuthPage() {
     setErr(null);
     setLoading(true);
     try {
+      if (isNativeIos()) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: `${window.location.origin}/auth-native-callback`,
+            skipBrowserRedirect: true,
+          },
+        });
+        if (error) throw error;
+        if (!data.url) throw new Error("No se pudo iniciar el acceso con Google.");
+
+        await Browser.open({
+          url: data.url,
+          presentationStyle: "popover",
+        });
+        return;
+      }
+
       const result = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin,
       });
       if (result.error) {
         setErr(result.error.message || "Error al iniciar sesión con Google");
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApple = async () => {
+    setErr(null);
+    setLoading(true);
+    try {
+      const result = await lovable.auth.signInWithOAuth("apple", {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) {
+        setErr(result.error.message || "Error al iniciar sesión con Apple");
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Error desconocido");
@@ -146,9 +236,19 @@ function AuthPage() {
 
         <button
           type="button"
+          onClick={handleApple}
+          disabled={loading}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-md border border-border bg-foreground px-3 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          <span aria-hidden="true" className="text-base leading-none"></span>
+          Continuar con Apple
+        </button>
+
+        <button
+          type="button"
           onClick={handleGoogle}
           disabled={loading}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
         >
           <svg className="h-4 w-4" viewBox="0 0 48 48" aria-hidden="true">
             <path
