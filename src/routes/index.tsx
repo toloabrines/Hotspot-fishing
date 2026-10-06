@@ -33,6 +33,7 @@ import { formatHHMM, formatMinutesUntil } from "../lib/solunar";
 import { toDegMinSec } from "../components/FishingHotspots.types";
 import type { SearchArea } from "../lib/geo-area";
 import { LAYER_CONFIGS, type LayerType } from "../components/ocean-layers";
+import { isNativeIos } from "../lib/native-platform";
 
 import { useResolvedCopernicusDate } from "../hooks/use-resolved-copernicus-date";
 import { AppMenu } from "../components/AppMenu";
@@ -752,7 +753,9 @@ function Index() {
           : "calamar";
     if (!hasModule(modId)) {
       setAnalysisMessage(
-        "Este modo de pesca requiere suscripción (5 €/mes). Actívalo en Planes y suscripción.",
+        isNativeIos()
+          ? "Este modo de pesca no está activo en esta cuenta."
+          : "Este modo de pesca requiere suscripción (5 €/mes). Actívalo en Planes y suscripción.",
       );
       return;
     }
@@ -2303,4 +2306,3 @@ function AnalysisMessageChip({ message, onDismiss }: { message: string; onDismis
     </div>
   );
 }
-
