@@ -21,7 +21,7 @@ export const Route = createFileRoute("/privacy")({
 });
 
 function PrivacyPage() {
-  const lastUpdated = "October 7, 2026";
+  const lastUpdated = "June 5, 2026";
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-3xl px-6 py-12">
@@ -51,15 +51,6 @@ function PrivacyPage() {
           <h3 className="text-xl font-semibold mt-6 mb-2">2. Information We Collect</h3>
           <ul className="list-disc pl-6 mb-4 space-y-1">
             <li>
-              <strong>Account information:</strong> your email address, account identifier, and
-              name if provided, to sign you in, manage access and respond to support requests.
-            </li>
-            <li>
-              <strong>Purchases and subscriptions:</strong> product identifiers, transaction
-              references, subscription status and expiry dates, to verify purchases, restore access
-              and manage your modules. Payment providers process your payment details.
-            </li>
-            <li>
               <strong>Location data:</strong> with your permission, to display your position on the
               map and provide nearby fishing information.
             </li>
@@ -68,17 +59,15 @@ function PrivacyPage() {
               your account if you sign in.
             </li>
             <li>
-              <strong>Technical and usage data:</strong> device type, OS version, app interactions
-              and usage records to improve stability and understand how features are used. Some
-              records are linked to your account identifier.
+              <strong>Technical data:</strong> device type, OS version, and anonymous usage logs to
+              improve stability.
             </li>
           </ul>
 
           <h3 className="text-xl font-semibold mt-6 mb-2">3. How We Use Your Information</h3>
           <p className="mb-4">
-            We use the information to operate the App, manage accounts and subscription access,
-            display oceanographic maps, save your fishing spots, provide support and improve the
-            user experience. We do not sell your personal data.
+            We use the information to operate the App, display oceanographic maps, save your fishing
+            spots, and improve the user experience. We do not sell your personal data.
           </p>
 
           <h3 className="text-xl font-semibold mt-6 mb-2">4. Data Sharing</h3>
@@ -137,16 +126,6 @@ function PrivacyPage() {
           <h3 className="text-xl font-semibold mt-6 mb-2">2. Información que Recopilamos</h3>
           <ul className="list-disc pl-6 mb-4 space-y-1">
             <li>
-              <strong>Datos de cuenta:</strong> tu correo electrónico, identificador de cuenta y
-              nombre si lo facilitas, para iniciar sesión, gestionar el acceso y atender consultas
-              de soporte.
-            </li>
-            <li>
-              <strong>Compras y suscripciones:</strong> identificadores de producto, referencias
-              de transacciones, estado y fechas de vencimiento, para verificar compras, restaurar
-              el acceso y gestionar los módulos. Los proveedores de pago procesan los datos de pago.
-            </li>
-            <li>
               <strong>Datos de ubicación:</strong> con tu permiso, para mostrar tu posición en el
               mapa y ofrecerte información de pesca cercana.
             </li>
@@ -155,18 +134,15 @@ function PrivacyPage() {
               dispositivo o en tu cuenta si inicias sesión.
             </li>
             <li>
-              <strong>Datos técnicos y de uso:</strong> tipo de dispositivo, versión del sistema
-              operativo, interacciones y registros de uso para mejorar la estabilidad y entender
-              cómo se utilizan las funciones. Algunos registros se vinculan al identificador de
-              tu cuenta.
+              <strong>Datos técnicos:</strong> tipo de dispositivo, versión del sistema operativo y
+              registros anónimos de uso para mejorar la estabilidad.
             </li>
           </ul>
 
           <h3 className="text-xl font-semibold mt-6 mb-2">3. Uso de la Información</h3>
           <p className="mb-4">
-            Utilizamos la información para operar la App, gestionar cuentas y el acceso a las
-            suscripciones, mostrar mapas oceanográficos, guardar tus zonas de pesca, prestar
-            soporte y mejorar la experiencia de usuario. No vendemos tus datos personales.
+            Utilizamos la información para operar la App, mostrar mapas oceanográficos, guardar tus
+            zonas de pesca y mejorar la experiencia de usuario. No vendemos tus datos personales.
           </p>
 
           <h3 className="text-xl font-semibold mt-6 mb-2">4. Compartición de Datos</h3>
