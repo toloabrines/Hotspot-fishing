@@ -393,9 +393,11 @@ export async function buildMbar24Tiles(
     sampleValid > 0 && samplePositive / sampleValid > 0.9 && sampleNegative === 0;
 
   const sourcePixel = (lat: number, lng: number): [number, number] => {
-    if (isGeographic) return [(lng - x0) / rx, (lat - y0) / ry];
+    // GeoTIFF geotransform points to the upper-left pixel edge; geotiff.js
+    // raster samples are indexed from pixel centers.
+    if (isGeographic) return [(lng - x0) / rx - 0.5, (lat - y0) / ry - 0.5];
     const [mx, my] = toMercator(lat, lng);
-    return [(mx - x0) / rx, (my - y0) / ry];
+    return [(mx - x0) / rx - 0.5, (my - y0) / ry - 0.5];
   };
 
   const tiles: Mbar24BuiltTile[] = [];
@@ -432,7 +434,9 @@ export async function buildMbar24Tiles(
 
       tile.fill(MBAR24_NODATA);
       if (winX1 > winX0 && winY1 > winY0) {
-        const window: [number, number, number, number] = [winX0, winY0, winX1, winY1];
+        const window: [number, number, number, number] = alreadyNative4326
+          ? [outX0, outY0, outX1, outY1]
+          : [winX0, winY0, winX1, winY1];
         const windowWidth = winX1 - winX0;
         const windowHeight = winY1 - winY0;
         const rasterWindow = (await image.readRasters({
@@ -468,7 +472,9 @@ export async function buildMbar24Tiles(
             const outCol = outX0 + x;
             const lng = gridWest + (outCol + 0.5) * dLng;
             const [px, py] = sourcePixel(lat, lng);
-            let value = sample(px, py);
+            let value = alreadyNative4326
+              ? (rasterWindow[y * windowWidth + x] as number)
+              : sample(px, py);
             if (!Number.isFinite(value)) continue;
             if (positiveDepthConvention) value = -Math.abs(value);
             const dm = Math.round(value / MBAR24_SCALE);
