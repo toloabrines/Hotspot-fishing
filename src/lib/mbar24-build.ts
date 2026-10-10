@@ -398,6 +398,7 @@ export async function buildMbar24Tiles(
     return [(mx - x0) / rx, (my - y0) / ry];
   };
 
+  const tiles: Mbar24BuiltTile[] = [];
   const tile = new Int16Array(MBAR24_TILE_SIZE * MBAR24_TILE_SIZE);
   let tileCount = 0;
   let minElev = Infinity;
