@@ -298,7 +298,7 @@ export async function buildMbar24Tiles(
   onProgress: (p: BuildProgress) => void,
   onTile?: (tile: Mbar24BuiltTile) => Promise<void> | void,
 ): Promise<Mbar24BuildResult> {
-  onProgress({ phase: "read", pct: 2, detail: "Abriendo GeoTIFF…" });
+  onProgress({ phase: "read", pct: 2, detail: "Abriendo GeoTIFF por bloques…" });
   const tiff = await fromBlob(file);
   const image = await tiff.getImage();
   const srcWidth = image.getWidth();
@@ -309,20 +309,15 @@ export async function buildMbar24Tiles(
   const srcEpsg = Number(keys["ProjectedCSTypeGeoKey"] ?? keys["GeographicTypeGeoKey"] ?? 0);
   const isGeographic = srcEpsg === 4326 || (!keys["ProjectedCSTypeGeoKey"] && Math.abs(ox) <= 180);
 
-  onProgress({
-    phase: "read",
-    pct: 8,
-    detail: `Leyendo banda de elevación (${srcWidth}×${srcHeight}, EPSG:${srcEpsg || "?"})…`,
-  });
-  const rasters = await image.readRasters({ samples: [0], interleave: true });
-  const src = rasters as unknown as Float32Array | Int16Array | Int32Array | Float64Array;
+  if (!srcWidth || !srcHeight || !rx || !ry) {
+    throw new Error("El GeoTIFF no tiene dimensiones o georreferenciación válidas.");
+  }
 
-  // Bbox del ráster en coordenadas nativas → geográficas.
   const x0 = ox;
   const y0 = oy;
   const x1 = ox + srcWidth * rx;
   const y1 = oy + srcHeight * ry;
-  let north: number, south: number, west: number, east: number;
+  let south: number, north: number, west: number, east: number;
   if (isGeographic) {
     west = Math.min(x0, x1);
     east = Math.max(x0, x1);
@@ -338,13 +333,6 @@ export async function buildMbar24Tiles(
   }
 
   const latMid = (south + north) / 2;
-
-  // Ruta rápida para GeoTIFF que YA están en EPSG:4326 y aproximadamente a 16 m.
-  // Evita construir una segunda malla completa en memoria y remuestrear píxel a píxel,
-  // que en Safari/iPhone puede bloquear la pestaña incluso con ficheros pequeños.
-  //
-  // Es especialmente útil para batimetrías procedentes de sonda que ya hemos
-  // preparado previamente como una rejilla regular.
   const srcResXM = Math.abs(rx) * 111320 * Math.cos((latMid * Math.PI) / 180);
   const srcResYM = Math.abs(ry) * 110540;
   const alreadyNative4326 =
@@ -357,234 +345,178 @@ export async function buildMbar24Tiles(
     srcResYM >= 12 &&
     srcResYM <= 20;
 
-  if (alreadyNative4326) {
-    onProgress({
-      phase: "tiles",
-      pct: 20,
-      detail: `GeoTIFF ya preparado · ${srcWidth}×${srcHeight} · generando teselas sin remuestrear…`,
-    });
-
-    // Algunas sondas exportan "profundidad positiva" (p. ej. 14.2 m), mientras
-    // que el DEM de Hotspot usa elevación bajo el nivel del mar (p. ej. -14.2 m).
-    // Solo invertimos automáticamente cuando no hay valores negativos reales.
-    let validCount = 0;
-    let positiveCount = 0;
-    let negativeCount = 0;
-    for (let i = 0; i < src.length; i++) {
-      const v = src[i] as number;
-      if (!Number.isFinite(v) || v <= -9000 || v > 100 || v >= 1e6) continue;
-      validCount++;
-      if (v > 0.05) positiveCount++;
-      if (v < -0.05) negativeCount++;
-    }
-    const positiveDepthConvention =
-      validCount > 0 && positiveCount / validCount > 0.9 && negativeCount === 0;
-
-    const TS = MBAR24_TILE_SIZE;
-    const tilesX = Math.ceil(srcWidth / TS);
-    const tilesY = Math.ceil(srcHeight / TS);
-    const tiles: Mbar24BuiltTile[] = [];
-    let tileCount = 0;
-    let minElev = Infinity;
-    let maxElev = -Infinity;
-
-    for (let ty = 0; ty < tilesY; ty++) {
-      for (let tx = 0; tx < tilesX; tx++) {
-        const tile = new Int16Array(TS * TS).fill(MBAR24_NODATA);
-        let valid = 0;
-
-        for (let y = 0; y < TS; y++) {
-          const sy = ty * TS + y;
-          if (sy >= srcHeight) break;
-          for (let x = 0; x < TS; x++) {
-            const sx = tx * TS + x;
-            if (sx >= srcWidth) break;
-
-            let v = src[sy * srcWidth + sx] as number;
-            if (!Number.isFinite(v) || v <= -9000 || v > 100 || v >= 1e6) continue;
-            if (positiveDepthConvention) v = -Math.abs(v);
-
-            const dm = Math.round(v / MBAR24_SCALE);
-            if (dm <= MBAR24_NODATA || dm > 32767) continue;
-
-            tile[y * TS + x] = dm;
-            valid++;
-            if (v < minElev) minElev = v;
-            if (v > maxElev) maxElev = v;
-          }
-        }
-
-        if (valid > 0) {
-          const builtTile = { x: tx, y: ty, data: new Uint8Array(tile.buffer.slice(0)) };
-          tileCount++;
-          if (onTile) {
-            await onTile(builtTile);
-          } else {
-            tiles.push(builtTile);
-          }
-          // En iPhone/Safari es importante liberar el hilo y permitir que se
-          // recoja la memoria de cada tesela antes de construir la siguiente.
-          await new Promise((res) => setTimeout(res, 0));
-        }
-      }
-
-      onProgress({
-        phase: "tiles",
-        pct: 20 + Math.round(((ty + 1) / tilesY) * 72),
-        detail: `Teselas ${tileCount} procesadas sin remuestrear…`,
-      });
-      // Ceder el hilo en cada fila de teselas mantiene Safari/iPhone sensible.
-      await new Promise((res) => setTimeout(res, 0));
-    }
-
-    if (!Number.isFinite(minElev)) {
-      throw new Error("El fichero no contiene valores de profundidad válidos.");
-    }
-
-    return {
-      sheet: sheetId,
-      south,
-      west,
-      north,
-      east,
-      cols: srcWidth,
-      rows: srcHeight,
-      dLat: Math.abs(ry),
-      dLng: Math.abs(rx),
-      tilesX,
-      tilesY,
-      tileCount,
-      tiles,
-      minElev,
-      maxElev,
-      srcWidth,
-      srcHeight,
-      srcEpsg,
-    };
-  }
-
-  const dLat = NATIVE_RES_M / 110540;
-  const dLng = NATIVE_RES_M / (111320 * Math.cos((latMid * Math.PI) / 180));
-  const cols = Math.max(1, Math.floor((east - west) / dLng));
-  const rows = Math.max(1, Math.floor((north - south) / dLat));
-  const gridEast = west + cols * dLng;
-  const gridSouth = north - rows * dLat;
+  const dLat = alreadyNative4326 ? Math.abs(ry) : NATIVE_RES_M / 110540;
+  const dLng = alreadyNative4326
+    ? Math.abs(rx)
+    : NATIVE_RES_M / (111320 * Math.cos((latMid * Math.PI) / 180));
+  const cols = alreadyNative4326
+    ? srcWidth
+    : Math.max(1, Math.floor((east - west) / dLng));
+  const rows = alreadyNative4326
+    ? srcHeight
+    : Math.max(1, Math.floor((north - south) / dLat));
+  const tilesX = Math.ceil(cols / MBAR24_TILE_SIZE);
+  const tilesY = Math.ceil(rows / MBAR24_TILE_SIZE);
+  const gridWest = west;
+  const gridNorth = north;
+  const gridEast = gridWest + cols * dLng;
+  const gridSouth = gridNorth - rows * dLat;
 
   onProgress({
     phase: "grid",
     pct: 15,
-    detail: `Remuestreando a EPSG:4326 · ${cols}×${rows} celdas (16 m)…`,
+    detail: `Preparando malla de 16 m · lectura por teselas de ${MBAR24_TILE_SIZE}×${MBAR24_TILE_SIZE}…`,
   });
 
-  const grid = new Int16Array(cols * rows).fill(MBAR24_NODATA);
-  let minElev = Infinity;
-  let maxElev = -Infinity;
+  // Decide si la hoja contiene profundidades positivas (en vez de elevaciones
+  // negativas) con una muestra pequeña; no hace falta expandir todo el TIFF.
+  const sampleWidth = Math.min(srcWidth, 384);
+  const sampleHeight = Math.max(1, Math.min(srcHeight, Math.round((sampleWidth / srcWidth) * srcHeight)));
+  const sampled = (await image.readRasters({
+    samples: [0],
+    interleave: true,
+    width: sampleWidth,
+    height: sampleHeight,
+  })) as unknown as ArrayLike<number>;
+  let sampleValid = 0;
+  let samplePositive = 0;
+  let sampleNegative = 0;
+  for (let i = 0; i < sampled.length; i++) {
+    const value = sampled[i] as number;
+    if (!Number.isFinite(value) || value <= -9000 || value > 100 || value >= 1e6) continue;
+    sampleValid++;
+    if (value > 0.05) samplePositive++;
+    if (value < -0.05) sampleNegative++;
+  }
+  if (sampleValid === 0) throw new Error("El fichero no contiene valores de profundidad válidos.");
+  const positiveDepthConvention =
+    sampleValid > 0 && samplePositive / sampleValid > 0.9 && sampleNegative === 0;
 
-  const sample = (px: number, py: number): number => {
-    // Bilineal sobre el ráster original, descartando NODATA.
-    const fx = Math.floor(px);
-    const fy = Math.floor(py);
-    if (fx < 0 || fy < 0 || fx >= srcWidth - 1 || fy >= srcHeight - 1) return NaN;
-    const tx = px - fx;
-    const ty = py - fy;
-    let sum = 0;
-    let wsum = 0;
-    for (let j = 0; j <= 1; j++) {
-      for (let i = 0; i <= 1; i++) {
-        const v = src[(fy + j) * srcWidth + (fx + i)] as number;
-        if (!Number.isFinite(v) || v <= -9000 || v > 100 || v >= 1e6) continue;
-        const wgt = (i ? tx : 1 - tx) * (j ? ty : 1 - ty);
-        sum += v * wgt;
-        wsum += wgt;
-      }
-    }
-    return wsum > 0.35 ? sum / wsum : NaN;
+  const sourcePixel = (lat: number, lng: number): [number, number] => {
+    if (isGeographic) return [(lng - x0) / rx, (lat - y0) / ry];
+    const [mx, my] = toMercator(lat, lng);
+    return [(mx - x0) / rx, (my - y0) / ry];
   };
 
-  for (let r = 0; r < rows; r++) {
-    const lat = north - (r + 0.5) * dLat;
-    for (let c = 0; c < cols; c++) {
-      const lng = west + (c + 0.5) * dLng;
-      let px: number, py: number;
-      if (isGeographic) {
-        px = (lng - x0) / rx;
-        py = (lat - y0) / ry;
-      } else {
-        const [mx, my] = toMercator(lat, lng);
-        px = (mx - x0) / rx;
-        py = (my - y0) / ry;
+  const tile = new Int16Array(MBAR24_TILE_SIZE * MBAR24_TILE_SIZE);
+  let tileCount = 0;
+  let minElev = Infinity;
+  let maxElev = -Infinity;
+  let completedTiles = 0;
+
+  for (let ty = 0; ty < tilesY; ty++) {
+    for (let tx = 0; tx < tilesX; tx++) {
+      const outX0 = tx * MBAR24_TILE_SIZE;
+      const outX1 = Math.min(cols, outX0 + MBAR24_TILE_SIZE);
+      const outY0 = ty * MBAR24_TILE_SIZE;
+      const outY1 = Math.min(rows, outY0 + MBAR24_TILE_SIZE);
+      const latNorth = gridNorth - outY0 * dLat;
+      const latSouth = gridNorth - outY1 * dLat;
+      const lngWest = gridWest + outX0 * dLng;
+      const lngEast = gridWest + outX1 * dLng;
+      const projected = [
+        sourcePixel(latNorth, lngWest),
+        sourcePixel(latNorth, lngEast),
+        sourcePixel(latSouth, lngWest),
+        sourcePixel(latSouth, lngEast),
+      ];
+      const minPx = Math.min(...projected.map((p) => p[0]));
+      const maxPx = Math.max(...projected.map((p) => p[0]));
+      const minPy = Math.min(...projected.map((p) => p[1]));
+      const maxPy = Math.max(...projected.map((p) => p[1]));
+      const winX0 = Math.max(0, Math.floor(minPx) - 1);
+      const winY0 = Math.max(0, Math.floor(minPy) - 1);
+      const winX1 = Math.min(srcWidth, Math.ceil(maxPx) + 2);
+      const winY1 = Math.min(srcHeight, Math.ceil(maxPy) + 2);
+
+      tile.fill(MBAR24_NODATA);
+      if (winX1 > winX0 && winY1 > winY0) {
+        const window: [number, number, number, number] = [winX0, winY0, winX1, winY1];
+        const windowWidth = winX1 - winX0;
+        const windowHeight = winY1 - winY0;
+        const rasterWindow = (await image.readRasters({
+          window,
+          samples: [0],
+          interleave: true,
+        })) as unknown as ArrayLike<number>;
+
+        const sample = (px: number, py: number): number => {
+          const fx = Math.floor(px) - winX0;
+          const fy = Math.floor(py) - winY0;
+          if (fx < 0 || fy < 0 || fx >= windowWidth - 1 || fy >= windowHeight - 1) return NaN;
+          const tx = px - Math.floor(px);
+          const ty = py - Math.floor(py);
+          let sum = 0;
+          let weightSum = 0;
+          for (let j = 0; j <= 1; j++) {
+            for (let i = 0; i <= 1; i++) {
+              const value = rasterWindow[(fy + j) * windowWidth + fx + i] as number;
+              if (!Number.isFinite(value) || value <= -9000 || value > 100 || value >= 1e6) continue;
+              const weight = (i ? tx : 1 - tx) * (j ? ty : 1 - ty);
+              sum += value * weight;
+              weightSum += weight;
+            }
+          }
+          return weightSum > 0.35 ? sum / weightSum : NaN;
+        };
+
+        for (let y = 0; y < outY1 - outY0; y++) {
+          const outRow = outY0 + y;
+          const lat = gridNorth - (outRow + 0.5) * dLat;
+          for (let x = 0; x < outX1 - outX0; x++) {
+            const outCol = outX0 + x;
+            const lng = gridWest + (outCol + 0.5) * dLng;
+            const [px, py] = sourcePixel(lat, lng);
+            let value = sample(px, py);
+            if (!Number.isFinite(value)) continue;
+            if (positiveDepthConvention) value = -Math.abs(value);
+            const dm = Math.round(value / MBAR24_SCALE);
+            if (dm <= MBAR24_NODATA || dm > 32767) continue;
+            tile[y * MBAR24_TILE_SIZE + x] = dm;
+            if (value < minElev) minElev = value;
+            if (value > maxElev) maxElev = value;
+          }
+          if (y % 32 === 31) await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        let valid = false;
+        for (let i = 0; i < tile.length; i++) {
+          if (tile[i] !== MBAR24_NODATA) {
+            valid = true;
+            break;
+          }
+        }
+        if (valid) {
+          const builtTile = {
+            x: tx,
+            y: ty,
+            data: new Uint8Array(tile.buffer.slice(0)),
+          };
+          tileCount++;
+          if (onTile) await onTile(builtTile);
+          else tiles.push(builtTile);
+        }
       }
-      const v = sample(px, py);
-      if (!Number.isFinite(v)) continue;
-      const dm = Math.round(v / MBAR24_SCALE);
-      if (dm <= MBAR24_NODATA || dm > 32767) continue;
-      grid[r * cols + c] = dm;
-      if (v < minElev) minElev = v;
-      if (v > maxElev) maxElev = v;
-    }
-    if (r % 128 === 0) {
+
+      completedTiles++;
       onProgress({
-        phase: "grid",
-        pct: 15 + Math.round((r / rows) * 55),
-        detail: `Remuestreando fila ${r}/${rows}…`,
+        phase: "tiles",
+        pct: 20 + Math.round((completedTiles / (tilesX * tilesY)) * 72),
+        detail: `Teselas ${completedTiles} de ${tilesX * tilesY} · RAM limitada a un bloque…`,
       });
-      // Cede el hilo para que la UI siga respondiendo.
-      await new Promise((res) => setTimeout(res, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
   }
 
   if (!Number.isFinite(minElev)) {
-    throw new Error(
-      "El fichero no contiene valores de elevación válidos (¿es un BAG en vez de GeoTIFF?).",
-    );
-  }
-
-  const TS = MBAR24_TILE_SIZE;
-  const tilesX = Math.ceil(cols / TS);
-  const tilesY = Math.ceil(rows / TS);
-  const tiles: Mbar24BuiltTile[] = [];
-  let tileCount = 0;
-  onProgress({ phase: "tiles", pct: 72, detail: `Generando ${tilesX * tilesY} teselas…` });
-
-  for (let ty = 0; ty < tilesY; ty++) {
-    for (let tx = 0; tx < tilesX; tx++) {
-      const tile = new Int16Array(TS * TS).fill(MBAR24_NODATA);
-      let valid = 0;
-      for (let y = 0; y < TS; y++) {
-        const sy = ty * TS + y;
-        if (sy >= rows) break;
-        for (let x = 0; x < TS; x++) {
-          const sx = tx * TS + x;
-          if (sx >= cols) break;
-          const v = grid[sy * cols + sx];
-          if (v === MBAR24_NODATA) continue;
-          tile[y * TS + x] = v;
-          valid++;
-        }
-      }
-      if (valid === 0) continue; // tesela vacía: no se publica
-      const builtTile = { x: tx, y: ty, data: new Uint8Array(tile.buffer.slice(0)) };
-      tileCount++;
-      if (onTile) {
-        await onTile(builtTile);
-      } else {
-        tiles.push(builtTile);
-      }
-      await new Promise((res) => setTimeout(res, 0));
-    }
-    onProgress({
-      phase: "tiles",
-      pct: 72 + Math.round(((ty + 1) / tilesY) * 20),
-      detail: `Teselas ${tileCount} procesadas…`,
-    });
-    await new Promise((res) => setTimeout(res, 0));
+    throw new Error("El fichero no contiene valores de profundidad válidos en la malla de 16 m.");
   }
 
   return {
     sheet: sheetId,
     south: gridSouth,
-    west,
-    north,
+    west: gridWest,
+    north: gridNorth,
     east: gridEast,
     cols,
     rows,
@@ -611,4 +543,3 @@ export function toBase64(bytes: Uint8Array): string {
   }
   return btoa(bin);
 }
-
