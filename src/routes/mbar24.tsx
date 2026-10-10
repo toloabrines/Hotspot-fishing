@@ -343,9 +343,9 @@ function Mbar24AdminPage() {
       <header className="space-y-1">
         <h1 className="text-xl font-semibold">Batimetría MBAR24 · 16 m</h1>
         <p className="text-sm text-muted-foreground">
-          Sube la hoja del IHM en <strong>GeoTIFF</strong> (16 M). El fichero se procesa en este
-          dispositivo: se reproyecta a EPSG:4326, se trocea en teselas de {MBAR24_TILE_SIZE}×
-          {MBAR24_TILE_SIZE} y solo se suben esas teselas y su ficha. El mapa 2D las usa al
+          Sube la hoja del IHM en <strong>GeoTIFF</strong> (16 M). Se procesa por bloques de
+          {MBAR24_TILE_SIZE}×{MBAR24_TILE_SIZE} para limitar la memoria del dispositivo; solo se
+          suben las teselas y la ficha de cobertura. El mapa 2D las usa al
           instante.
         </p>
         <p className="text-xs text-muted-foreground">
