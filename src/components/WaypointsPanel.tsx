@@ -255,7 +255,6 @@ export function WaypointsPanel({
       <div className="mb-1.5 flex items-center gap-1.5">
         <span className="text-xs">📌</span>
         <span className="flex-1 text-[10px] font-semibold text-foreground">Waypoints fijos</span>
-        <span className="text-[9px] tabular-nums text-muted-foreground">{waypoints.length}</span>
       </div>
 
       <div className="mb-1.5 flex items-center justify-between gap-1.5 rounded-md border border-border/60 bg-background/40 px-1.5 py-0.5">
