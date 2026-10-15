@@ -8,6 +8,7 @@ import type { MultiLayerState } from "./MultiLayerPanel";
 import type { LayerType } from "./ocean-layers";
 import { useSubscriptions } from "../hooks/use-subscriptions";
 import type { ModuleId } from "../lib/modules";
+import { isNativeIos } from "../lib/native-platform";
 
 const MODE_MODULE: Record<"surface" | "bottom" | "squid" | "drift", ModuleId> = {
   surface: "superficie",
@@ -165,12 +166,29 @@ function LockedRow({
   label,
   hint,
   onClose,
+  iosNative = false,
 }: {
   icon: string;
   label: string;
   hint: string;
   onClose: () => void;
+  iosNative?: boolean;
 }) {
+  if (iosNative) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-card/30 px-2.5 py-2 opacity-70">
+        <span className="text-[11px] font-bold">{icon}</span>
+        <span className="flex-1">
+          <span className="block text-[11.5px] font-semibold text-foreground">{label}</span>
+          <span className="block text-[10px] leading-snug text-muted-foreground">
+            No activo en esta cuenta
+          </span>
+        </span>
+        <span className="text-[11px]">🔒</span>
+      </div>
+    );
+  }
+
   return (
     <Link
       to="/precios"
@@ -251,6 +269,7 @@ function Section({
 export function AppMenu(props: AppMenuProps) {
   const { open, onClose } = props;
   const { hasModule, hasAny } = useSubscriptions();
+  const iosNative = isNativeIos();
   const [openIds, setOpenIds] = useState<Record<string, boolean>>({
     modo: true,
     capas: true,
@@ -358,6 +377,15 @@ export function AppMenu(props: AppMenuProps) {
                     : "border-border bg-card/40 text-muted-foreground hover:bg-secondary/60"
                 } ${unlocked ? "" : "opacity-60"}`;
                 if (!unlocked) {
+                  if (iosNative) {
+                    return (
+                      <div key={m.id} className={cls} aria-disabled="true">
+                        <span className="text-base">{m.emoji}</span>
+                        <span>{m.label}</span>
+                        <span className="absolute right-1 top-1 text-[10px]">🔒</span>
+                      </div>
+                    );
+                  }
                   return (
                     <Link key={m.id} to="/precios" onClick={onClose} className={cls} title="Módulo no contratado · 5 €/mes">
                       <span className="text-base">{m.emoji}</span>
@@ -653,6 +681,7 @@ export function AppMenu(props: AppMenuProps) {
                 label="FSLE · Líneas de convergencia"
                 hint="Incluido en Pesca de Superficie · 5 €/mes"
                 onClose={onClose}
+                iosNative={iosNative}
               />
             )}
 
@@ -690,6 +719,7 @@ export function AppMenu(props: AppMenuProps) {
                   label="Fondo marino profesional"
                   hint="Incluido en Pesca de Fondo · 5 €/mes"
                   onClose={onClose}
+                  iosNative={iosNative}
                 />
               )}
             </Section>
@@ -725,6 +755,7 @@ export function AppMenu(props: AppMenuProps) {
                 label="Dibujar triángulo"
                 hint="Requiere un módulo activo · 5 €/mes"
                 onClose={onClose}
+                iosNative={iosNative}
               />
             )}
             <button
@@ -873,14 +904,16 @@ export function AppMenu(props: AppMenuProps) {
               <span>📘</span>
               <span>Guía de la aplicación</span>
             </Link>
-            <Link
-              to="/precios"
-              onClick={props.onClose}
-              className="flex items-center gap-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-2.5 py-2 text-[11.5px] font-semibold text-amber-100 hover:bg-amber-500/20"
-            >
-              <span>⭐</span>
-              <span>Planes y suscripción</span>
-            </Link>
+            {!iosNative && (
+              <Link
+                to="/precios"
+                onClick={props.onClose}
+                className="flex items-center gap-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-2.5 py-2 text-[11.5px] font-semibold text-amber-100 hover:bg-amber-500/20"
+              >
+                <span>⭐</span>
+                <span>Planes y suscripción</span>
+              </Link>
+            )}
             <Link
               to="/cuenta"
               onClick={props.onClose}
@@ -902,4 +935,3 @@ export function AppMenu(props: AppMenuProps) {
     </>
   );
 }
-

@@ -9,88 +9,34 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VisorSimpleRouteImport } from './routes/visor-simple'
-import { Route as SondaRouteImport } from './routes/sonda'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as Qa3dRouteImport } from './routes/qa3d'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as PreciosRouteImport } from './routes/precios'
-import { Route as Mbar24RouteImport } from './routes/mbar24'
-import { Route as GuiaRouteImport } from './routes/guia'
-import { Route as GithubStatusRouteImport } from './routes/github-status'
-import { Route as FsleExportRouteImport } from './routes/fsle-export'
-import { Route as FrentesRouteImport } from './routes/frentes'
-import { Route as CuentaRouteImport } from './routes/cuenta'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiTileProxyRouteImport } from './routes/api.tile-proxy'
-import { Route as ApiMbar24IndexRouteImport } from './routes/api.mbar24-index'
-import { Route as ApiMbar24DownloadRouteImport } from './routes/api.mbar24-download'
-import { Route as ApiDemRouteImport } from './routes/api.dem'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CuentaRouteImport } from './routes/cuenta'
+import { Route as FrentesRouteImport } from './routes/frentes'
+import { Route as FsleExportRouteImport } from './routes/fsle-export'
+import { Route as GithubStatusRouteImport } from './routes/github-status'
+import { Route as GuiaRouteImport } from './routes/guia'
+import { Route as Mbar24RouteImport } from './routes/mbar24'
+import { Route as PreciosRouteImport } from './routes/precios'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as Qa3dRouteImport } from './routes/qa3d'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SondaRouteImport } from './routes/sonda'
+import { Route as SupportRouteImport } from './routes/support'
+import { Route as VisorSimpleRouteImport } from './routes/visor-simple'
 import { Route as ApiBathymetryRouteImport } from './routes/api.bathymetry'
-import { Route as ApiPublicGpxDownloadRouteImport } from './routes/api.public.gpx-download'
-import { Route as ApiPublicFsleGeojsonDownloadRouteImport } from './routes/api.public.fsle-geojson-download'
+import { Route as ApiDemRouteImport } from './routes/api.dem'
+import { Route as ApiMbar24DownloadRouteImport } from './routes/api.mbar24-download'
+import { Route as ApiMbar24IndexRouteImport } from './routes/api.mbar24-index'
+import { Route as ApiTileProxyRouteImport } from './routes/api.tile-proxy'
 import { Route as ApiPublicFsleRouteImport } from './routes/api.public.fsle'
+import { Route as ApiPublicFsleGeojsonDownloadRouteImport } from './routes/api.public.fsle-geojson-download'
+import { Route as ApiPublicGpxDownloadRouteImport } from './routes/api.public.gpx-download'
 import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api.public.payments.webhook'
 
-const VisorSimpleRoute = VisorSimpleRouteImport.update({
-  id: '/visor-simple',
-  path: '/visor-simple',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SondaRoute = SondaRouteImport.update({
-  id: '/sonda',
-  path: '/sonda',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const Qa3dRoute = Qa3dRouteImport.update({
-  id: '/qa3d',
-  path: '/qa3d',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PreciosRoute = PreciosRouteImport.update({
-  id: '/precios',
-  path: '/precios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const Mbar24Route = Mbar24RouteImport.update({
-  id: '/mbar24',
-  path: '/mbar24',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GuiaRoute = GuiaRouteImport.update({
-  id: '/guia',
-  path: '/guia',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GithubStatusRoute = GithubStatusRouteImport.update({
-  id: '/github-status',
-  path: '/github-status',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FsleExportRoute = FsleExportRouteImport.update({
-  id: '/fsle-export',
-  path: '/fsle-export',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FrentesRoute = FrentesRouteImport.update({
-  id: '/frentes',
-  path: '/frentes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CuentaRoute = CuentaRouteImport.update({
-  id: '/cuenta',
-  path: '/cuenta',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -98,29 +44,69 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const CuentaRoute = CuentaRouteImport.update({
+  id: '/cuenta',
+  path: '/cuenta',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiTileProxyRoute = ApiTileProxyRouteImport.update({
-  id: '/api/tile-proxy',
-  path: '/api/tile-proxy',
+const FrentesRoute = FrentesRouteImport.update({
+  id: '/frentes',
+  path: '/frentes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiMbar24IndexRoute = ApiMbar24IndexRouteImport.update({
-  id: '/api/mbar24-index',
-  path: '/api/mbar24-index',
+const FsleExportRoute = FsleExportRouteImport.update({
+  id: '/fsle-export',
+  path: '/fsle-export',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiMbar24DownloadRoute = ApiMbar24DownloadRouteImport.update({
-  id: '/api/mbar24-download',
-  path: '/api/mbar24-download',
+const GithubStatusRoute = GithubStatusRouteImport.update({
+  id: '/github-status',
+  path: '/github-status',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDemRoute = ApiDemRouteImport.update({
-  id: '/api/dem',
-  path: '/api/dem',
+const GuiaRoute = GuiaRouteImport.update({
+  id: '/guia',
+  path: '/guia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Mbar24Route = Mbar24RouteImport.update({
+  id: '/mbar24',
+  path: '/mbar24',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PreciosRoute = PreciosRouteImport.update({
+  id: '/precios',
+  path: '/precios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Qa3dRoute = Qa3dRouteImport.update({
+  id: '/qa3d',
+  path: '/qa3d',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SondaRoute = SondaRouteImport.update({
+  id: '/sonda',
+  path: '/sonda',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VisorSimpleRoute = VisorSimpleRouteImport.update({
+  id: '/visor-simple',
+  path: '/visor-simple',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiBathymetryRoute = ApiBathymetryRouteImport.update({
@@ -128,9 +114,29 @@ const ApiBathymetryRoute = ApiBathymetryRouteImport.update({
   path: '/api/bathymetry',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicGpxDownloadRoute = ApiPublicGpxDownloadRouteImport.update({
-  id: '/api/public/gpx-download',
-  path: '/api/public/gpx-download',
+const ApiDemRoute = ApiDemRouteImport.update({
+  id: '/api/dem',
+  path: '/api/dem',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMbar24DownloadRoute = ApiMbar24DownloadRouteImport.update({
+  id: '/api/mbar24-download',
+  path: '/api/mbar24-download',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMbar24IndexRoute = ApiMbar24IndexRouteImport.update({
+  id: '/api/mbar24-index',
+  path: '/api/mbar24-index',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTileProxyRoute = ApiTileProxyRouteImport.update({
+  id: '/api/tile-proxy',
+  path: '/api/tile-proxy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicFsleRoute = ApiPublicFsleRouteImport.update({
+  id: '/api/public/fsle',
+  path: '/api/public/fsle',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicFsleGeojsonDownloadRoute =
@@ -139,9 +145,9 @@ const ApiPublicFsleGeojsonDownloadRoute =
     path: '/api/public/fsle-geojson-download',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicFsleRoute = ApiPublicFsleRouteImport.update({
-  id: '/api/public/fsle',
-  path: '/api/public/fsle',
+const ApiPublicGpxDownloadRoute = ApiPublicGpxDownloadRouteImport.update({
+  id: '/api/public/gpx-download',
+  path: '/api/public/gpx-download',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicPaymentsWebhookRoute =
@@ -165,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/qa3d': typeof Qa3dRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sonda': typeof SondaRoute
+  '/support': typeof SupportRoute
   '/visor-simple': typeof VisorSimpleRoute
   '/api/bathymetry': typeof ApiBathymetryRoute
   '/api/dem': typeof ApiDemRoute
@@ -190,6 +197,7 @@ export interface FileRoutesByTo {
   '/qa3d': typeof Qa3dRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sonda': typeof SondaRoute
+  '/support': typeof SupportRoute
   '/visor-simple': typeof VisorSimpleRoute
   '/api/bathymetry': typeof ApiBathymetryRoute
   '/api/dem': typeof ApiDemRoute
@@ -216,6 +224,7 @@ export interface FileRoutesById {
   '/qa3d': typeof Qa3dRoute
   '/reset-password': typeof ResetPasswordRoute
   '/sonda': typeof SondaRoute
+  '/support': typeof SupportRoute
   '/visor-simple': typeof VisorSimpleRoute
   '/api/bathymetry': typeof ApiBathymetryRoute
   '/api/dem': typeof ApiDemRoute
@@ -243,6 +252,7 @@ export interface FileRouteTypes {
     | '/qa3d'
     | '/reset-password'
     | '/sonda'
+    | '/support'
     | '/visor-simple'
     | '/api/bathymetry'
     | '/api/dem'
@@ -268,6 +278,7 @@ export interface FileRouteTypes {
     | '/qa3d'
     | '/reset-password'
     | '/sonda'
+    | '/support'
     | '/visor-simple'
     | '/api/bathymetry'
     | '/api/dem'
@@ -293,6 +304,7 @@ export interface FileRouteTypes {
     | '/qa3d'
     | '/reset-password'
     | '/sonda'
+    | '/support'
     | '/visor-simple'
     | '/api/bathymetry'
     | '/api/dem'
@@ -319,6 +331,7 @@ export interface RootRouteChildren {
   Qa3dRoute: typeof Qa3dRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SondaRoute: typeof SondaRoute
+  SupportRoute: typeof SupportRoute
   VisorSimpleRoute: typeof VisorSimpleRoute
   ApiBathymetryRoute: typeof ApiBathymetryRoute
   ApiDemRoute: typeof ApiDemRoute
@@ -333,88 +346,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/visor-simple': {
-      id: '/visor-simple'
-      path: '/visor-simple'
-      fullPath: '/visor-simple'
-      preLoaderRoute: typeof VisorSimpleRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sonda': {
-      id: '/sonda'
-      path: '/sonda'
-      fullPath: '/sonda'
-      preLoaderRoute: typeof SondaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/qa3d': {
-      id: '/qa3d'
-      path: '/qa3d'
-      fullPath: '/qa3d'
-      preLoaderRoute: typeof Qa3dRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof PrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/precios': {
-      id: '/precios'
-      path: '/precios'
-      fullPath: '/precios'
-      preLoaderRoute: typeof PreciosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/mbar24': {
-      id: '/mbar24'
-      path: '/mbar24'
-      fullPath: '/mbar24'
-      preLoaderRoute: typeof Mbar24RouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/guia': {
-      id: '/guia'
-      path: '/guia'
-      fullPath: '/guia'
-      preLoaderRoute: typeof GuiaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/github-status': {
-      id: '/github-status'
-      path: '/github-status'
-      fullPath: '/github-status'
-      preLoaderRoute: typeof GithubStatusRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/fsle-export': {
-      id: '/fsle-export'
-      path: '/fsle-export'
-      fullPath: '/fsle-export'
-      preLoaderRoute: typeof FsleExportRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/frentes': {
-      id: '/frentes'
-      path: '/frentes'
-      fullPath: '/frentes'
-      preLoaderRoute: typeof FrentesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cuenta': {
-      id: '/cuenta'
-      path: '/cuenta'
-      fullPath: '/cuenta'
-      preLoaderRoute: typeof CuentaRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -424,39 +360,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/cuenta': {
+      id: '/cuenta'
+      path: '/cuenta'
+      fullPath: '/cuenta'
+      preLoaderRoute: typeof CuentaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/tile-proxy': {
-      id: '/api/tile-proxy'
-      path: '/api/tile-proxy'
-      fullPath: '/api/tile-proxy'
-      preLoaderRoute: typeof ApiTileProxyRouteImport
+    '/frentes': {
+      id: '/frentes'
+      path: '/frentes'
+      fullPath: '/frentes'
+      preLoaderRoute: typeof FrentesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/mbar24-index': {
-      id: '/api/mbar24-index'
-      path: '/api/mbar24-index'
-      fullPath: '/api/mbar24-index'
-      preLoaderRoute: typeof ApiMbar24IndexRouteImport
+    '/fsle-export': {
+      id: '/fsle-export'
+      path: '/fsle-export'
+      fullPath: '/fsle-export'
+      preLoaderRoute: typeof FsleExportRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/mbar24-download': {
-      id: '/api/mbar24-download'
-      path: '/api/mbar24-download'
-      fullPath: '/api/mbar24-download'
-      preLoaderRoute: typeof ApiMbar24DownloadRouteImport
+    '/github-status': {
+      id: '/github-status'
+      path: '/github-status'
+      fullPath: '/github-status'
+      preLoaderRoute: typeof GithubStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/dem': {
-      id: '/api/dem'
-      path: '/api/dem'
-      fullPath: '/api/dem'
-      preLoaderRoute: typeof ApiDemRouteImport
+    '/guia': {
+      id: '/guia'
+      path: '/guia'
+      fullPath: '/guia'
+      preLoaderRoute: typeof GuiaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mbar24': {
+      id: '/mbar24'
+      path: '/mbar24'
+      fullPath: '/mbar24'
+      preLoaderRoute: typeof Mbar24RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/precios': {
+      id: '/precios'
+      path: '/precios'
+      fullPath: '/precios'
+      preLoaderRoute: typeof PreciosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qa3d': {
+      id: '/qa3d'
+      path: '/qa3d'
+      fullPath: '/qa3d'
+      preLoaderRoute: typeof Qa3dRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sonda': {
+      id: '/sonda'
+      path: '/sonda'
+      fullPath: '/sonda'
+      preLoaderRoute: typeof SondaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/visor-simple': {
+      id: '/visor-simple'
+      path: '/visor-simple'
+      fullPath: '/visor-simple'
+      preLoaderRoute: typeof VisorSimpleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/bathymetry': {
@@ -466,11 +458,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBathymetryRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/gpx-download': {
-      id: '/api/public/gpx-download'
-      path: '/api/public/gpx-download'
-      fullPath: '/api/public/gpx-download'
-      preLoaderRoute: typeof ApiPublicGpxDownloadRouteImport
+    '/api/dem': {
+      id: '/api/dem'
+      path: '/api/dem'
+      fullPath: '/api/dem'
+      preLoaderRoute: typeof ApiDemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mbar24-download': {
+      id: '/api/mbar24-download'
+      path: '/api/mbar24-download'
+      fullPath: '/api/mbar24-download'
+      preLoaderRoute: typeof ApiMbar24DownloadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mbar24-index': {
+      id: '/api/mbar24-index'
+      path: '/api/mbar24-index'
+      fullPath: '/api/mbar24-index'
+      preLoaderRoute: typeof ApiMbar24IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/tile-proxy': {
+      id: '/api/tile-proxy'
+      path: '/api/tile-proxy'
+      fullPath: '/api/tile-proxy'
+      preLoaderRoute: typeof ApiTileProxyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/fsle': {
+      id: '/api/public/fsle'
+      path: '/api/public/fsle'
+      fullPath: '/api/public/fsle'
+      preLoaderRoute: typeof ApiPublicFsleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/fsle-geojson-download': {
@@ -480,11 +500,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicFsleGeojsonDownloadRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/fsle': {
-      id: '/api/public/fsle'
-      path: '/api/public/fsle'
-      fullPath: '/api/public/fsle'
-      preLoaderRoute: typeof ApiPublicFsleRouteImport
+    '/api/public/gpx-download': {
+      id: '/api/public/gpx-download'
+      path: '/api/public/gpx-download'
+      fullPath: '/api/public/gpx-download'
+      preLoaderRoute: typeof ApiPublicGpxDownloadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/payments/webhook': {
@@ -511,6 +531,7 @@ const rootRouteChildren: RootRouteChildren = {
   Qa3dRoute: Qa3dRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SondaRoute: SondaRoute,
+  SupportRoute: SupportRoute,
   VisorSimpleRoute: VisorSimpleRoute,
   ApiBathymetryRoute: ApiBathymetryRoute,
   ApiDemRoute: ApiDemRoute,
