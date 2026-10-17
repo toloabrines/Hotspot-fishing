@@ -383,3 +383,39 @@ workflows:
           print("TESTFLIGHT_BUILD_FOUND=" + ("true" if builds else "false"))
           PY
 
+  android-apk:
+    name: Android — APK de prueba (sin publicar)
+    max_build_duration: 60
+    instance_type: linux_x2
+
+    environment:
+      vars:
+        CI: "true"
+      node: 22
+      java: 21
+
+    cache:
+      cache_paths:
+        - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
+        - $HOME/.cache/pnpm
+
+    scripts:
+      - name: Instalar dependencias y preparar Android
+        script: |
+          set -euxo pipefail
+          corepack enable
+          corepack prepare pnpm@10.15.1 --activate
+          pnpm install --no-frozen-lockfile
+          pnpm run build
+          pnpm exec cap sync android
+
+      - name: Generar APK instalable de prueba
+        script: |
+          set -euxo pipefail
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
