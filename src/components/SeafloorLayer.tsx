@@ -176,9 +176,12 @@ export function SeafloorLayer({
     for (const ds of sonarRef.current) {
       if (!ds.points.length) continue;
       const stride = Math.max(1, Math.ceil(ds.points.length / 2200));
-      const depths = ds.points.map((p) => p.depthM);
-      const min = Math.min(...depths);
-      const max = Math.max(...depths);
+      let min = Infinity;
+      let max = -Infinity;
+      for (const reading of ds.points) {
+        min = Math.min(min, reading.depthM);
+        max = Math.max(max, reading.depthM);
+      }
       let lastLabel: L.Point | null = null;
       let prev = ds.points[0];
       let prevPos = map.latLngToContainerPoint([prev.lat, prev.lng]);
