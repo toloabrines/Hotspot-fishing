@@ -13,7 +13,7 @@ import {
  * resolver piedras y estructuras de pocas decenas de metros: los datos
  * públicos tienen celdas de 115 m o más.
  */
-export function SonarImportPanel() {
+export function SonarImportPanel({ onFocus }: { onFocus?: () => void } = {}) {
   const datasets = useSyncExternalStore(
     subscribeSonarDatasets,
     getSonarDatasets,
@@ -24,6 +24,10 @@ export function SonarImportPanel() {
   const [busy, setBusy] = useState(false);
 
   const total = datasets.reduce((n, d) => n + d.points.length, 0);
+  const focusDataset = (ds: SonarDataset) => {
+    onFocus?.(); // Disable GPS-centered relief while viewing imported readings.
+    window.dispatchEvent(new CustomEvent("hotspot:sonar-focus", { detail: ds.bounds }));
+  };
 
   const onFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -42,6 +46,7 @@ export function SonarImportPanel() {
       } else {
         const ok = setSonarDatasets([...datasets, ...added]);
         const pts = added.reduce((n, d) => n + d.points.length, 0);
+        if (ok && added.length) focusDataset(added[0]);
         setStatus(
           ok
             ? `${pts.toLocaleString("es-ES")} sondas importadas · resolución ~${Math.min(
@@ -86,6 +91,10 @@ export function SonarImportPanel() {
       </button>
 
       {status && <div className="text-[10px] text-muted-foreground">{status}</div>}
+      <p className="text-[10px] text-muted-foreground">
+        Se muestra el fondo medido bajo la barca. Fuera de las pasadas solo aparecen
+        curvas si existe cartografía de base. No se inventan profundidades.
+      </p>
 
       {datasets.length > 0 && (
         <div className="space-y-1 pt-0.5">
@@ -104,6 +113,14 @@ export function SonarImportPanel() {
                   {d.points.length.toLocaleString("es-ES")} pts · ~{d.spacingM} m
                 </span>
               </span>
+              <button
+                type="button"
+                onClick={() => focusDataset(d)}
+                className="shrink-0 rounded border border-primary/50 px-1.5 py-0.5 text-primary"
+                title="Centrar el mapa en estas mediciones"
+              >
+                Ver en mapa
+              </button>
               <button
                 type="button"
                 onClick={() => remove(d.id)}
