@@ -553,3 +553,38 @@ export function applySoundingsToGrid(grid: DemGrid, datasets: SonarDataset[]): D
     elev,
   });
 }
+
+
+/**
+ * Malla local de respaldo para los sondeos importados cuando /api/dem no responde.
+ * Solo rellena celdas cercanas a mediciones reales; el resto permanece sin dato.
+ * No se inventa una superficie batimétrica a partir de una única pasada.
+ */
+export function buildSonarOnlyGrid(
+  bbox: DemBBox,
+  size: number,
+  datasets: SonarDataset[],
+): DemGrid | null {
+  if (!datasets.some((d) =>
+    d.bounds.south <= bbox.north && d.bounds.north >= bbox.south &&
+    d.bounds.west <= bbox.east && d.bounds.east >= bbox.west
+  )) return null;
+  const midLat = ((bbox.north + bbox.south) / 2) * Math.PI / 180;
+  const widthM = (bbox.east - bbox.west) * EARTH_LNG_M * Math.cos(midLat);
+  const heightM = (bbox.north - bbox.south) * EARTH_LAT_M;
+  if (!(widthM > 0 && heightM > 0)) return null;
+  const cols = Math.min(640, Math.max(64, Math.round(size)));
+  const rows = Math.min(640, Math.max(64, Math.round(cols * heightM / widthM)));
+  // Un píxel de decenas/cientos de metros no representa una medida puntual.
+  // A zoom lejano se dibuja únicamente la trayectoria con sus cotas reales.
+  if (widthM / cols > 40 || heightM / rows > 40) return null;
+
+  const empty = new DemGrid({
+    cols, rows,
+    ...bbox,
+    source: "sin-carta-base",
+    elev: new Array<number | null>(cols * rows).fill(null),
+  }, false);
+  const merged = applySoundingsToGrid(empty, datasets);
+  return merged === empty ? null : merged;
+}
