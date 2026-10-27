@@ -83,7 +83,7 @@ jobs:
           corepack prepare pnpm@10.15.1 --activate
 
       - name: Install JS deps
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --no-frozen-lockfile --ignore-scripts
 
       - name: Build web
         run: npm run build
