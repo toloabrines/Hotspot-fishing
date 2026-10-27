@@ -77,8 +77,13 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Setup pnpm 10.15.1
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.1 --activate
+
       - name: Install JS deps
-        run: npm install --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build web
         run: npm run build
