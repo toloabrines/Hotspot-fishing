@@ -48,10 +48,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build web app and sync Capacitor
-        run: |
-          pnpm run build
-          pnpm exec cap sync ios
+      - name: Build web app
+        run: pnpm run build
+
+      - name: TypeScript
+        run: pnpm exec tsc --noEmit
+
+      - name: Sync Capacitor
+        run: pnpm exec cap sync ios
 
       - name: Install CocoaPods dependencies
         working-directory: ios/App
