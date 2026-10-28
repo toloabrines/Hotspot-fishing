@@ -1,7 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import { applySoundingsToGrid, DemGrid, fetchDemGrid, snapBBox } from "../lib/dem";
+import { applySoundingsToGrid, buildSonarOnlyGrid, DemGrid, fetchDemGrid, snapBBox } from "../lib/dem";
 import { getSonarDatasets, subscribeSonarDatasets } from "../lib/sonar-data";
 import { contourLevels, contourSegments, isMasterLevel, renderDemImage } from "../lib/seafloor-render";
 import { detectStructures, structureIcon, type SeafloorStructure } from "../lib/seafloor-structures";
@@ -103,8 +103,9 @@ export function SeafloorLayer({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.x, size.y);
     const s = settingsRef.current;
-    if (!grid || !s.enabled) return;
+    if (!s.enabled) return;
 
+    if (grid) {
     ctx.globalAlpha = Math.max(0.05, Math.min(1, s.opacity));
 
     // 1. Raster (paleta + hillshade + pendiente + rugosidad) fila a fila,
@@ -166,7 +167,74 @@ export function SeafloorLayer({
       }
     }
 
-    // 3. Línea del perfil
+    }
+
+    // 3. Sondeos medidos: siempre visibles aunque falle /api/dem.
+    // Es una franja de mediciones, no una carta batimétrica inventada.
+    ctx.globalAlpha = 1;
+    let visibleSonar = false;
+    for (const ds of sonarRef.current) {
+      if (!ds.points.length) continue;
+      const stride = Math.max(1, Math.ceil(ds.points.length / 2200));
+      let min = Infinity;
+      let max = -Infinity;
+      for (const reading of ds.points) {
+        min = Math.min(min, reading.depthM);
+        max = Math.max(max, reading.depthM);
+      }
+      let lastLabel: L.Point | null = null;
+      let prev = ds.points[0];
+      let prevPos = map.latLngToContainerPoint([prev.lat, prev.lng]);
+      for (let i = stride; i < ds.points.length; i += stride) {
+        const p = ds.points[i];
+        const cp = map.latLngToContainerPoint([p.lat, p.lng]);
+        const distM = Math.hypot(
+          (p.lat - prev.lat) * 110540,
+          (p.lng - prev.lng) * 111320 * Math.cos(p.lat * Math.PI / 180),
+        );
+        if (distM < 120 &&
+            Math.max(cp.x, prevPos.x) >= -12 && Math.min(cp.x, prevPos.x) <= size.x + 12 &&
+            Math.max(cp.y, prevPos.y) >= -12 && Math.min(cp.y, prevPos.y) <= size.y + 12) {
+          visibleSonar = true;
+          const t = max > min ? (p.depthM - min) / (max - min) : 0.5;
+          const hue = 180 + 80 * t;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(prevPos.x, prevPos.y);
+          ctx.lineTo(cp.x, cp.y);
+          ctx.strokeStyle = "rgba(255,255,255,0.9)";
+          ctx.lineWidth = 7;
+          ctx.stroke();
+          ctx.strokeStyle = `hsl(${hue.toFixed(0)},95%,42%)`;
+          ctx.lineWidth = 4.5;
+          ctx.stroke();
+          if (cp.x > 25 && cp.y > 25 && cp.x < size.x - 48 && cp.y < size.y - 28 &&
+              (!lastLabel || cp.distanceTo(lastLabel) > 115)) {
+            const label = `${p.depthM.toFixed(1)} m`;
+            ctx.font = "bold 11px system-ui, sans-serif";
+            const width = ctx.measureText(label).width + 12;
+            ctx.fillStyle = "rgba(3,23,43,0.9)";
+            ctx.fillRect(cp.x + 7, cp.y - 9, width, 19);
+            ctx.fillStyle = "#fff";
+            ctx.fillText(label, cp.x + 13, cp.y + 4);
+            lastLabel = cp;
+          }
+        }
+        prev = p;
+        prevPos = cp;
+      }
+    }
+    if (visibleSonar && !grid) {
+      ctx.fillStyle = "rgba(4,26,48,0.92)";
+      ctx.fillRect(12, 12, Math.min(size.x - 24, 290), 43);
+      ctx.fillStyle = "#fff";
+      ctx.font = "600 11px system-ui, sans-serif";
+      ctx.fillText("SONDEOS REALES · sin carta base", 20, 29);
+      ctx.font = "10px system-ui, sans-serif";
+      ctx.fillText("Sin datos fuera del recorrido medido", 20, 44);
+    }
+
+    // 4. Línea del perfil
     const pts = profileRef.current;
     if (pts.length >= 1) {
       ctx.globalAlpha = 1;
@@ -221,7 +289,10 @@ export function SeafloorLayer({
         east: round(gps.lng + dLng),
       };
       onLoadingChange?.(true);
-      fetchDemGrid(focusBox, 640).then(applyGrid).finally(() => onLoadingChange?.(false));
+      fetchDemGrid(focusBox, 640)
+        .then((base) => applyGrid(base ?? buildSonarOnlyGrid(focusBox, 640, sonarRef.current)))
+        .catch(() => applyGrid(buildSonarOnlyGrid(focusBox, 640, sonarRef.current)))
+        .finally(() => onLoadingChange?.(false));
       return;
     }
     const b = map.getBounds();
@@ -239,7 +310,8 @@ export function SeafloorLayer({
 
     onLoadingChange?.(true);
     fetchDemGrid(bbox, size)
-      .then(applyGrid)
+      .then((base) => applyGrid(base ?? buildSonarOnlyGrid(bbox, size, sonarRef.current)))
+      .catch(() => applyGrid(buildSonarOnlyGrid(bbox, size, sonarRef.current)))
       .finally(() => onLoadingChange?.(false));
   };
 
@@ -314,6 +386,19 @@ export function SeafloorLayer({
   useEffect(() => {
     draw.current();
   }, [settings.opacity, settings.contours, profilePoints]);
+
+  // Acercar el mapa a los sondeos recién importados, sin depender de la base.
+  useEffect(() => {
+    const focus = (e: Event) => {
+      const b = (e as CustomEvent<{ south: number; west: number; north: number; east: number }>).detail;
+      if (!b || ![b.south, b.west, b.north, b.east].every(Number.isFinite)) return;
+      map.fitBounds(L.latLngBounds([b.south, b.west], [b.north, b.east]), {
+        padding: [36, 36], maxZoom: 15,
+      });
+    };
+    window.addEventListener("hotspot:sonar-focus", focus);
+    return () => window.removeEventListener("hotspot:sonar-focus", focus);
+  }, [map]);
 
   // En modo GPS: el barco se mueve libremente dentro del relieve ya cargado y
   // sólo se recarga (y por tanto sólo "salta" la pantalla) cuando se acerca al

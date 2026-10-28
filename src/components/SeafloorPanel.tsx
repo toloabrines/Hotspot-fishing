@@ -165,7 +165,7 @@ export function SeafloorPanel({
 
           <AutoBathyPanel />
 
-          <SonarImportPanel />
+          <SonarImportPanel onFocus={() => set("focusGps", false)} />
 
           <div className="flex gap-1">
 
