@@ -4,7 +4,7 @@ android {
     namespace "com.hotspotfishing.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.hotspotfishing.app"
+        applicationId "app.lovable.hotspotfishing"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
