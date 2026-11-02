@@ -9,8 +9,8 @@ import { contourSegments, renderDemImage } from "../lib/seafloor-render";
 import { MBAR24_KNOWN_SHEETS, fetchMbar24Coverage, type Mbar24Coverage } from "../lib/mbar24";
 import type { SeafloorSettings } from "../lib/seafloor.types";
 
-/** Más allá de este zoom el dato de 16 m ya no aporta nada útil: se oculta. */
-const MAX_USEFUL_ZOOM = 17;
+/** Permite seguir acercando el mapa sin ocultar la batimetría cargada. */
+const MAX_USEFUL_ZOOM = 22;
 
 function isIosDevice(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -376,8 +376,8 @@ export function Mbar24BathymetryLayer({
 
     const zoom = map.getZoom();
     const hit = intersectSheet(map.getBounds(), coverageRef.current);
-    // Por debajo de z9 no aporta y por encima de MAX_USEFUL_ZOOM se supera la
-    // escala útil del dato de 16 m: se oculta la capa en vez de ampliarla.
+    // Por debajo de z9 no aporta. Hasta MAX_USEFUL_ZOOM mantenemos visible la
+    // batimetría y permitimos overzoom visual; no se inventa detalle nuevo.
     if (!hit || zoom < 9 || zoom > MAX_USEFUL_ZOOM) return clear();
 
     const current = gridRef.current;
